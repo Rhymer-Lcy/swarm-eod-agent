@@ -1,0 +1,19 @@
+# Conda environment for swarm-eod-agent (development, tests and local simulation).
+#
+# Python 3.11 matches the interpreter of the organizer's evaluation image as
+# described in doc/participants/03-*.md section 10.3. The project packages are
+# installed with pip from the repository root after the environment exists:
+#
+#   conda env create -f environments/swarm-eod-agent.conda.yml
+#   conda activate swarm-eod-agent
+#   python -m pip install -e ".[dev]"
+#
+# For an exactly reproduced package set, install the platform lock first:
+#   python -m pip install -r environments/lock/<platform>-py311.txt
+#   python -m pip install --no-deps -e ".[dev]"
+name: swarm-eod-agent
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
