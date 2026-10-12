@@ -89,8 +89,8 @@ a crash scores 0.
 PDF reference cases (the PDF does not name the map): perfect 100; 1 px dilation 100;
 1 px erosion 73.03; outline only 26.97; blank 0; all black 0 (penalty
 5.4677); 50 % random 0 (credit 0.5007, penalty 2.7371). The supplied
-`my_drone_place_example.py` submits such a random grid; the Phase 0 smoke run
-reproduced the pattern on Map01 (credit 0.4986, penalty 2.5444, map 0).
+`my_drone_place_example.py` submits such a random grid; the first Phase 0 smoke
+run reproduced the pattern on Map01 (credit 0.4986, penalty 2.5444, map 0).
 
 ### Bomb-layout difficulty (20 %)
 
