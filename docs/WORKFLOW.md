@@ -33,6 +33,7 @@
 | `docs/`, `devtools/`, `environments/`, `local project instructions` | Real `team_info.yml` (at its required path, ignored) |
 | Placeholder identity template | Server access notes, private patterns, wheels, bundles, logs, run outputs |
 | | `_review_packages/` (generated ZIPs) |
+| | `private project memory` (development tooling project memory) and `private local configuration` |
 
 Addresses, host names, accounts, workstation paths and the registered team
 identity are never written into tracked files. The owner's list of such
@@ -64,10 +65,10 @@ Target: a public repository `swarm-eod-agent` under the owner's GitHub
 account, reached over the existing authenticated GitHub CLI. Before the first
 push all of the following must hold, and the owner must give an explicit go:
 
-1. Redistribution of the supplied baseline and publication of participant work
-   are confirmed as permitted (open: see [PROVENANCE.md](PROVENANCE.md)).
-2. `check_repo_hygiene.py --history` reports no errors, and every warning has
-   been read.
+1. The redistribution basis is recorded (see the publication decision in
+   [PROVENANCE.md](PROVENANCE.md)) and no applicable prohibition is known.
+2. `check_repo_hygiene.py --history` reports no errors (it also scans commit
+   messages, identities and tag annotations), and every warning has been read.
 3. The tracked file list contains no archive, PDF, identity file, log or
    generated output, and no blob is unexpectedly large.
 4. The commit list to be published has been reviewed as a set (message

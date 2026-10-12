@@ -14,8 +14,9 @@ submission interface.
 
 | File | Content |
 |---|---|
-| [PROVENANCE.md](PROVENANCE.md) | Supplied originals and their SHA-256, authorship layers, licensing, open redistribution questions |
+| [PROVENANCE.md](PROVENANCE.md) | Supplied originals and their SHA-256, authorship layers, licensing, publication decision |
 | [COMPETITION_RULES.md](COMPETITION_RULES.md) | Scoring for both roles as implemented, constraints on agents, register of document/code discrepancies |
+| [ORGANIZER_QUESTIONS.md](ORGANIZER_QUESTIONS.md) | Draft clarification requests to the organizer (not sent) |
 | [SUBMISSION.md](SUBMISSION.md) | Entry points, modification boundaries, package layout, checker behaviour, team-identity workflow, image mode |
 | [ENVIRONMENT.md](ENVIRONMENT.md) | Python 3.11 environments, OpenGL findings, remote execution rules, test tiers and results, open risks |
 | [WORKFLOW.md](WORKFLOW.md) | Git conventions, public/private separation, hygiene scanner, publication gate, review packages |

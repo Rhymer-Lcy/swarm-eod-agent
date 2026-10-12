@@ -43,18 +43,30 @@ The scoring PDF is summarized in English in
 remains the authority. The baseline's Chinese documents are kept verbatim and
 are not translated in place.
 
-## Redistribution: open questions (publication is on hold)
+## Publication decision (2026-10-12)
 
-1. Whether the organizer permits participants to publish the supplied
-   baseline, in particular the layer-2 material (guides, maps, configuration,
-   checker), even though the archive carries an MIT license file.
-2. Whether competition rules restrict publishing participant solutions before
-   or during the evaluated competition. No such rule appears in the supplied
-   material; no other rules document was available to this project.
-3. Whether the scoring rules may be summarized publicly (they are not
-   reproduced, only summarized).
+The owner authorized a public GitHub repository containing the full history,
+including the supplied baseline. Basis:
 
-Until these are answered, the GitHub repository is not created or pushed. If
-the baseline may not be redistributed, a public repository would have to hold
-only layers 3 and 4, with instructions to obtain the baseline from the
-organizer and verify it by SHA-256.
+1. The baseline archive's only license file grants MIT terms for "this
+   software and associated documentation files". The organizer distributed
+   the whole archive with that file at its root and attached no other license,
+   confidentiality notice or redistribution restriction to any file.
+2. No rule prohibiting publication of the baseline or of participant code
+   appears in the supplied material (scoring PDF, participant guides, README,
+   INSTALL).
+3. The MIT license text and the simple-playgrounds attribution are kept
+   unchanged at the repository root; the original archive and the scoring PDF
+   are not published.
+
+Limits of this basis: the MIT grant is the upstream author's, and the
+organizer's own additions (layer 2) are not named in it. They are published
+because they were distributed with that license file and without any
+restriction, not because the upstream license is assumed to cover them. The
+question is put to the organizer as Q8 in
+[ORGANIZER_QUESTIONS.md](ORGANIZER_QUESTIONS.md). If the organizer objects, the
+additions will be removed from later commits; a published history cannot be
+withdrawn from copies already made.
+
+Project-authored files (layers 3 and 4) carry no separate license grant at
+present; choosing one is the owner's decision.
