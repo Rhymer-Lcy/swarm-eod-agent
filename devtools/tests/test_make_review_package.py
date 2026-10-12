@@ -86,3 +86,16 @@ def test_repository_errors_block_the_build(make_repo, tmp_path):
     repo = make_repo({"docs/hosts.md": f"server {PRIVATE_IP}\n"})
     with pytest.raises(SystemExit, match="hygiene scan"):
         build(repo, tmp_path)
+
+
+def test_selected_baseline_files_are_included_and_validated(make_repo, tmp_path):
+    repo = make_repo()
+    package = build(repo, tmp_path, "--baseline-file", "tools/legacy.py")
+    with zipfile.ZipFile(package) as zf:
+        assert "baseline/files/tools/legacy.py" in zf.namelist()
+        manifest = json.loads(zf.read("MANIFEST.json"))
+        assert manifest["baseline_files_included"] == ["tools/legacy.py"]
+    second = tmp_path / "second"
+    second.mkdir()
+    with pytest.raises(SystemExit, match="not a tracked baseline file"):
+        build(repo, second, "--baseline-file", "docs/README.md")

@@ -12,7 +12,9 @@ manual upload to an external reviewer. It contains:
 * ``source/``          every file added or modified since the baseline, as
                        committed at ``HEAD`` (the supplied baseline itself is not
                        duplicated; ``baseline/integrity.json`` accounts for it);
-* ``baseline/``        per-file integrity of the supplied baseline at ``HEAD``;
+* ``baseline/``        per-file integrity of the supplied baseline at ``HEAD``,
+                       plus any baseline files named with ``--baseline-file``
+                       (for example the scoring code a finding cites);
 * ``hygiene/``         repository hygiene reports for ``HEAD`` and the history;
 * ``evidence/``        sanitized validation reports copied from ``--evidence-dir``;
 * ``SHA256SUMS``       SHA-256 of every other file in the package.
@@ -123,6 +125,7 @@ def stage_package(
     base: str,
     scope_file: Path,
     evidence_dir: Optional[Path],
+    baseline_files: Sequence[str],
     state: Dict[str, object],
     generated_at: datetime,
 ) -> None:
@@ -148,8 +151,13 @@ def stage_package(
         write("source/" + path, git_bytes(["show", f"HEAD:{path}"], repo))
     write("source/CHANGES.txt", "".join(f"{s}\t{p}\n" for s, p in changes).encode("utf-8"))
 
-    write("baseline/integrity.json",
-          (json.dumps(baseline_integrity(repo, base), indent=1) + "\n").encode("utf-8"))
+    integrity = baseline_integrity(repo, base)
+    write("baseline/integrity.json", (json.dumps(integrity, indent=1) + "\n").encode("utf-8"))
+    tracked_baseline = {f["path"] for f in integrity["files"] if f["head_blob"] is not None}
+    for path in baseline_files:
+        if path not in tracked_baseline:
+            raise SystemExit(f"--baseline-file is not a tracked baseline file: {path}")
+        write("baseline/files/" + path, git_bytes(["show", f"HEAD:{path}"], repo))
 
     patterns = hygiene.load_private_patterns(repo)
     baseline_map = hygiene._baseline_map(repo)
@@ -191,6 +199,7 @@ def stage_package(
         "diff_base": base,
         "project_changes": [{"status": s, "path": p} for s, p in changes],
         "evidence_files": copied,
+        "baseline_files_included": sorted(baseline_files),
     }
     write("MANIFEST.json", (json.dumps(manifest, indent=1) + "\n").encode("utf-8"))
 
@@ -209,12 +218,13 @@ are open. Then:
 | `git/log.txt`, `git/status.txt`, `git/refs.txt` | History, working-tree status and refs |
 | `source/` | Each added or modified file as committed at HEAD; `CHANGES.txt` lists them |
 | `baseline/integrity.json` | Per-file state of the supplied baseline at HEAD (unchanged, modified, removed from tracking) |
+| `baseline/files/` | Selected baseline files as committed at HEAD, included because the scope cites them |
 | `hygiene/head.json`, `hygiene/history.json` | Publication-hygiene scans of HEAD and of every blob in the history |
 | `evidence/` | Sanitized validation reports (tests, environment audits) |
 | `SHA256SUMS` | SHA-256 of every other file; verify with `sha256sum -c SHA256SUMS` |
 
-The supplied baseline source is deliberately not duplicated here; its
-integrity is accounted for file by file in `baseline/integrity.json`, and the
+The supplied baseline is not duplicated here beyond the files the scope
+cites; its integrity is accounted for file by file in `baseline/integrity.json`, and the
 archive it came from is identified by SHA-256 in the project documentation.
 Infrastructure details (host names, addresses, accounts) are intentionally
 omitted from this package.
@@ -265,6 +275,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         help="Markdown file stating the review scope")
     parser.add_argument("--evidence-dir", type=Path, default=None,
                         help="directory of sanitized text evidence to include")
+    parser.add_argument("--baseline-file", action="append", default=[],
+                        help="baseline path to include under baseline/files/ (repeatable)")
     parser.add_argument("--base", default=DEFAULT_BASE, help="diff base (default: baseline tag)")
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "_review_packages")
     parser.add_argument("--repo", type=Path, default=REPO_ROOT)
@@ -300,11 +312,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         stage_package(stage, repo, phase=phase, base=args.base,
                       scope_file=args.scope_file.resolve(),
                       evidence_dir=args.evidence_dir.resolve() if args.evidence_dir else None,
+                      baseline_files=args.baseline_file,
                       state=state, generated_at=generated_at)
         findings, scanned = hygiene.scan_blobs(
             hygiene._directory_blobs(stage), baseline={},
             private_patterns=hygiene.load_private_patterns(repo), directory_mode=True)
-        blocking = [f for f in findings if f.severity == "ERROR"]
+        # Files under baseline/files/ are exact HEAD blobs of the supplied
+        # baseline; the HEAD scan below already classifies them and blocks on
+        # any error, so the directory pass must not re-judge them as project files.
+        blocking = [f for f in findings if f.severity == "ERROR"
+                    and not f.path.startswith("baseline/files/")]
         for label in ("head", "history"):
             report = json.loads((stage / "hygiene" / f"{label}.json").read_text(encoding="utf-8"))
             if report["counts"]["ERROR"]:
