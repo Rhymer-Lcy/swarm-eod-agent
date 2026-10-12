@@ -18,18 +18,47 @@ pins only `arcade==2.6.17`; every other dependency has a lower bound only.
   `pip freeze`. They are identical except `tzdata` (a Windows-only dependency
   of pandas).
 
+## Setup procedures
+
+Each environment is a dedicated conda environment; never install into `base`,
+a system Python or another project's environment.
+
+**Windows workstation** (PowerShell or Git Bash, from the repository root):
+
 ```bash
 conda env create -f environments/swarm-eod-agent.conda.yml
 conda activate swarm-eod-agent
 python -m pip install -e ".[dev]"
 cp devtools/templates/team_info.example.yml src/swarm_rescue/solutions/team_info.yml
+python -m pytest -q -p no:cacheprovider devtools/tests
+python devtools/probe_opengl.py
 ```
 
-What was verified: the Windows environment was created exactly this way. The
-Linux environment was created from the same spec and installed with the same
-`pip install -e ".[dev]"`, offline, from wheels pre-downloaded for the
-Windows-resolved versions (the server has no direct internet access).
-Installing from the lock files has not yet been exercised separately.
+**Ubuntu host with internet access**: the same five commands, then run
+GL-dependent work with `PYGLET_HEADLESS=True PYGLET_HEADLESS_DEVICE=<n>` when no
+display server exists.
+
+**Ubuntu host without internet access** (the procedure used on the project's
+server):
+
+1. On a connected machine, download Linux wheels for the locked set:
+   `python -m pip download --no-deps --only-binary=:all: --python-version 3.11
+   --implementation cp --abi cp311 --abi abi3 --abi none --platform
+   manylinux_2_35_x86_64 --platform manylinux_2_28_x86_64 --platform
+   manylinux2014_x86_64 -r <requirements without fpdf> -d wheels/`, add the
+   `fpdf==1.7.2` sdist (`--no-binary=:all:`) and wheels for `setuptools` and
+   `wheel`, and copy `wheels/` to the host.
+2. Create the conda environment (the Python interpreter itself must come from a
+   conda channel or a local package cache).
+3. `python -m pip install --no-index --find-links wheels setuptools wheel`, then
+   `python -m pip install --no-index --find-links wheels --no-build-isolation -e ".[dev]"`.
+4. Copy the team template as above and run with `PYTHONNOUSERSITE=1`.
+
+What was verified: the Windows environment was created exactly as above. The
+server environment was created with the offline procedure from wheels
+downloaded for the Windows-resolved versions. **Installing from the lock files
+into a clean environment has not been exercised**; the locks record what was
+resolved, not a proven reproduction recipe.
 
 Resolved versions of note: arcade 2.6.17, pyglet 2.0.dev23 (pre-release,
 required by arcade), pymunk 6.4.0, numpy 2.4.6, pandas 3.0.6,
@@ -80,11 +109,20 @@ mode, selected by environment variables only (`PYGLET_HEADLESS=True`,
 `PYGLET_HEADLESS_DEVICE=<n>`), with no change to framework code. The baseline's
 `xvfb-run` recipe cannot be used there (no Xvfb). Even where Xvfb exists it is
 normally served by Mesa's software rasterizer rather than the GPU; that was not
-measured here. Caveats: the context
-does not *report* 4.4, so the behaviour depends on the NVIDIA driver accepting
-4.40 shaders in a 3.3 context (true for driver 535); the evaluator's Mesa
-stack is a different implementation; and the mapping from EGL device index to
-physical GPU was not verified.
+measured here.
+
+Scope of this conclusion: the participant guides require OpenGL 4.4 / GLSL
+4.40, and the organizer's image provides it through Mesa. The server context
+*reports* 3.3; it works only because the NVIDIA 535 driver accepts and runs a
+4.40 compute shader in that context. Shader compilation, the ray parity tests
+and two smoke runs show that the local pipeline functions; they do **not**
+establish behavioural equivalence with the evaluator's Mesa OpenGL stack,
+which has not been tested.
+
+EGL device index versus physical GPU: **unresolved and environment-dependent.**
+`PYGLET_HEADLESS_DEVICE` indexes the EGL device list, whose order is not
+guaranteed to match `nvidia-smi` or CUDA numbering; Phase 0 used index 7 but
+did not confirm which physical GPU served it.
 
 ## Remote execution safety rules
 
@@ -94,36 +132,43 @@ The server is shared. These rules apply to every job:
    `df -h`, `nvidia-smi` (including `--query-compute-apps`), and for busy
    processes their CPU affinity (`taskset -cp`). Identify other jobs by working
    directory, never by user name.
-2. **One NUMA node at most** for this project, chosen from the current
-   arrangement. Use node 0 only while the inspection shows it is free of other
-   work; if another workload is pinned there, use the other node or wait. Pin
-   with `taskset -c <node CPU list>`.
-3. **Bound every run**: `timeout`, thread caps (`OMP_NUM_THREADS`,
+2. **NUMA node 0 only.** This project may use only NUMA node 0, pinned with
+   `taskset -c <node 0 CPU list from lscpu>`, and only while the inspection
+   shows node 0 free of other work. NUMA node 1 is used by other personnel and
+   is **never** a fallback. If node 0 is busy, or whether it is free cannot be
+   established, **defer the run**.
+3. **GPUs are checked, not assumed.** Before any GPU use, confirm with
+   `nvidia-smi --query-compute-apps` that the intended GPU has no compute
+   processes. A GPU that is idle at that moment is not thereby allocated to
+   this project; if allocation is in doubt, defer. Because the EGL device
+   index is not mapped to a physical GPU (see above), GPU-dependent runs need
+   every GPU's state checked, not only the one intended.
+4. **Bound every run**: `timeout`, thread caps (`OMP_NUM_THREADS`,
    `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `NUMEXPR_NUM_THREADS`,
    `OPENCV_NUM_THREADS`), one simulation process unless a parallel mode has been
-   tested, a GPU without other compute processes.
-4. **Never** terminate, renice, re-pin or otherwise touch another user's
+   tested.
+5. **Never** terminate, renice, re-pin or otherwise touch another user's
    processes; never use `pkill`, `killall` or `pgrep -f` patterns; terminate
    only this project's own PIDs. No `sudo`, no system packages, no driver or
    display changes.
-5. **Keep output inside the project**: logs and results under the clone's
+6. **Keep output inside the project**: logs and results under the clone's
    ignored `_local/` (`SWARM_RESCUE_RESULTS_DIR`), pytest `--basetemp` there too.
    Run Python with `PYTHONNOUSERSITE=1` (a user-site install would shadow every
    environment on the shared account) and `PYTHONDONTWRITEBYTECODE=1`.
-6. **Sustained work** (multi-round evaluations, sweeps, training) needs a
+7. **Sustained work** (multi-round evaluations, sweeps, training) needs a
    separate authorization from the owner, recorded with the CPU set, GPU and
    duration chosen.
-7. `/usr/bin/time` and `numactl` are not installed; time runs with bash's
+8. `/usr/bin/time` and `numactl` are not installed; time runs with bash's
    `SECONDS` or `time` keyword.
 
 ### Synchronisation and single source of truth
 
-The workstation repository is the only place commits are made. Until the
-public GitHub repository is approved, the server clone is updated from
-`git bundle` files copied over the LAN (`git fetch <bundle> main`, then
-`git merge --ff-only`); afterwards it will fetch from GitHub. The server clone
-never contains `_local/` material from the workstation, and its
-`team_info.yml` is the placeholder template.
+The workstation repository is the only place commits are made, and GitHub is
+its published mirror. The server has no direct internet access, so its clone
+is updated from `git bundle` files copied over the LAN (`git fetch <bundle>
+main`, then `git merge --ff-only`). The server clone never contains `_local/`
+material from the workstation, and its `team_info.yml` is the placeholder
+template.
 
 ## Test tiers
 
