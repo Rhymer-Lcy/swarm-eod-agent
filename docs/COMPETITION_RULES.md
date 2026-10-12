@@ -170,5 +170,6 @@ score or on submission validity.
 | D14 | `exploration_threshold_for_time_bonus` | Set to 90 in the supplied rescue plan. | Stored but not used by any score. | Informational |
 
 D1 and D2 can change rankings, and D7 and D12 affect how work should be
-planned. They are the first questions to put to the organizers. No agent
-behaviour may be designed to exploit D1.
+planned. The questions that need the organizer's answer are drafted in
+[ORGANIZER_QUESTIONS.md](ORGANIZER_QUESTIONS.md); until answered they are
+unknown. No agent behaviour may be designed to exploit D1.
