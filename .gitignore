@@ -82,3 +82,58 @@ eval_fixtures/
 # Regenerable output of tests/map_score/score_map.py
 tests/map_score/out/
 tests/map_score/__pycache__/
+
+# ---------------------------------------------------------------------------
+# swarm-eod-agent project rules. Everything above this banner is the baseline's
+# own .gitignore, kept exactly as supplied; project rules are only appended.
+# ---------------------------------------------------------------------------
+
+# Project documentation lives in docs/. The baseline rule "/docs" above would
+# otherwise hide it (docs/api, docs/_rst and docs/_build stay ignored).
+!/docs/
+
+# Local-only material: original source archives, private operational records,
+# environments, scratch work, and review packages for manual upload.
+/_local/
+/_review_packages/
+
+# Actual team registration details stay on the workstation. The launcher and the
+# official tooling read this exact path, so it exists locally but is never
+# tracked; devtools/templates/team_info.example.yml is the tracked template.
+/src/swarm_rescue/solutions/team_info.yml
+
+# Locally generated submission packages and checker temporary files.
+team[0-9][0-9][0-9]_*.zip
+.__check_*
+
+# Archives, documents and recordings are never tracked by accident.
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.pdf
+*.npz
+*.npy
+*.avi
+*.mp4
+
+# Simulation, evaluation and editor outputs written to the working directory.
+/bombs_*.json
+/results/
+*.out
+
+# Tool caches.
+.mypy_cache/
+.ruff_cache/
+
+# Credentials, keys and machine-specific configuration.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.netrc
