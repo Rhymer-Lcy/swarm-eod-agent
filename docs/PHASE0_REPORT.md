@@ -21,7 +21,7 @@ local results can be trusted to transfer to the official evaluation.
 | Rules and interface | Scoring for both roles checked against the code; 14 discrepancies recorded; submission interface and checker behaviour documented and characterized by tests | [COMPETITION_RULES.md](COMPETITION_RULES.md), [SUBMISSION.md](SUBMISSION.md) |
 | Environments | Python 3.11.17 environments on the workstation and the server with identical package sets (except `tzdata`); locks recorded | [ENVIRONMENT.md](ENVIRONMENT.md) |
 | Server audit | Topology, memory, disk, GPUs, GL stack, occupancy inspected read-only; no system changes; no other user's process touched | [ENVIRONMENT.md](ENVIRONMENT.md) |
-| Validation | Windows: checker PASS, devtools 20/20, tier A 84/84. Server: checker PASS, devtools 20/20, tier A 84/84, tier B 134/134 under EGL headless, smoke run PASS (2 of 2) | [ENVIRONMENT.md](ENVIRONMENT.md#phase-0-results) |
+| Validation | Windows: checker PASS, devtools 21/21, tier A 84/84. Server: checker PASS, devtools 21/21, tier A 84/84, tier B 134/134 under EGL headless, smoke run PASS (2 of 2) | [ENVIRONMENT.md](ENVIRONMENT.md#phase-0-results) |
 | Review packages | Generator with hygiene gate and post-write verification; Phase 0 package built from the final commit | [WORKFLOW.md](WORKFLOW.md#review-packages) |
 
 ## Not run or not verified

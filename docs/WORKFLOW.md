@@ -100,6 +100,8 @@ Contents: `README.md`, `MANIFEST.json` (phase, timestamps in UTC and UTC+8,
 commit, tree, dirty state), `scope.md`, `git/` (status, refs, log and the full
 project diff against the baseline tag), `source/` (each added or modified file
 at HEAD, without duplicating the baseline), `baseline/integrity.json`,
+`baseline/files/` (baseline files named with `--baseline-file`, for example
+the scoring code that a finding cites),
 `hygiene/` (scans of HEAD and of the history), `evidence/` (sanitized text
 reports), and `SHA256SUMS`.
 

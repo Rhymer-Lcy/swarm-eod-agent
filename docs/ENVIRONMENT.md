@@ -144,7 +144,7 @@ arcade), confirmed by the fact that tier B needed a GL context to run.
 |---|---|---|
 | `pip check` | PASS | PASS |
 | Workspace checker (demo or placeholder identity) | PASS | PASS (shell wrapper) |
-| Devtools tests | PASS 20/20 | PASS 20/20 |
+| Devtools tests | PASS 21/21 | PASS 21/21 |
 | Tier A | PASS 84/84 | PASS 84/84 (5 s) |
 | Tier B | NOT RUN (by design) | PASS 134/134 (13 s), including ray parity 10/10 |
 | OpenGL probe | PASS (4.6) | Default FAIL (no display); EGL PASS (3.3 context, shader compiled) |
@@ -155,13 +155,16 @@ claims; runs are stochastic (random initial headings, sensor noise, the example
 agent's random map). First run: red placed 10/10 bombs, submitted a random grid
 (map 0), wall 25.8, time 40.3 (partial 9.2 of a reachable 80); blue disposed
 0/10 bombs, health 99.0, time 0 (19.8 of 100), at 189 steps per second. Second
-run, at the final Phase 0 commit: red submitted at step 804 (wall 25.0, time
-100.0, partial 15.0); blue 0/10, health 98.4 (19.7).
+run, at commit `0fd1b76`: red submitted at step 804 (wall 25.0, time 100.0,
+partial 15.0); blue 0/10, health 98.4 (19.7). Later commits changed only
+`docs/` and `devtools/`, not the baseline.
 
-The final-commit test run on the server first reported errors in all three
-pytest tiers; the cause was the harness (a `--basetemp` directory whose parent
-did not exist, `FileNotFoundError`), and the re-run with the directory created
-passed 20/20, 84/84 and 134/134. Both outputs are kept in the review evidence.
+The server test run at `0fd1b76` first reported errors in all three pytest
+tiers; the cause was the harness (a `--basetemp` directory whose parent did
+not exist, `FileNotFoundError`), and the re-run with the directory created
+passed 20/20 (the devtools suite then had 20 tests), 84/84 and 134/134. Both
+outputs are kept in the review evidence. The 21st devtools test was added
+afterwards, and the devtools suite was re-run on both hosts at the final commit.
 
 ## Known blockers and open issues
 
