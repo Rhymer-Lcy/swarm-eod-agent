@@ -144,7 +144,7 @@ arcade), confirmed by the fact that tier B needed a GL context to run.
 |---|---|---|
 | `pip check` | PASS | PASS |
 | Workspace checker (demo or placeholder identity) | PASS | PASS (shell wrapper) |
-| Devtools tests | PASS 21/21 | PASS 21/21 |
+| Devtools tests | PASS 22/22 | PASS 22/22 |
 | Tier A | PASS 84/84 | PASS 84/84 (5 s) |
 | Tier B | NOT RUN (by design) | PASS 134/134 (13 s), including ray parity 10/10 |
 | OpenGL probe | PASS (4.6) | Default FAIL (no display); EGL PASS (3.3 context, shader compiled) |
@@ -163,8 +163,9 @@ The server test run at `0fd1b76` first reported errors in all three pytest
 tiers; the cause was the harness (a `--basetemp` directory whose parent did
 not exist, `FileNotFoundError`), and the re-run with the directory created
 passed 20/20 (the devtools suite then had 20 tests), 84/84 and 134/134. Both
-outputs are kept in the review evidence. The 21st devtools test was added
-afterwards, and the devtools suite was re-run on both hosts at the final commit.
+outputs are kept in the review evidence. Two devtools tests were added
+afterwards, and the 22-test devtools suite was re-run on both hosts at the
+final commit.
 
 ## Known blockers and open issues
 

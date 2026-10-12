@@ -111,7 +111,9 @@ be text of known types under 2 MiB; the build stops if the repository scans
 report errors or if the staged package contains anything the scanner flags,
 including the owner's private patterns. After writing, the ZIP is reopened,
 CRC-checked and compared member by member with `SHA256SUMS`, and a `.sha256`
-sidecar is written. Names follow
+sidecar is written. Paths containing non-ASCII characters are stored under
+ASCII aliases recorded in `MANIFEST.json` (`path_aliases`), because some unzip
+tools ignore the ZIP UTF-8 name flag. Names follow
 `swarm-eod-agent_<phase>_<UTC yyyymmddThhmmssZ>_<short commit>[-dirty].zip`.
 
 Evidence is sanitized before it is placed in the evidence directory:
