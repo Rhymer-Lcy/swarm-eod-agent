@@ -1,0 +1,37 @@
+# Store every text file with LF line endings and check it out with LF as well.
+# This overrides the machine-wide core.autocrlf=true set by Git for Windows, so a
+# Windows checkout stays byte-identical to the supplied baseline (which is all LF)
+# and shell scripts keep working when the tree is copied to a Linux host.
+* text=auto eol=lf
+
+*.py    text diff=python
+*.md    text diff=markdown
+*.sh    text eol=lf
+*.glsl  text
+*.json  text
+*.yml   text
+*.yaml  text
+*.toml  text
+*.ini   text
+*.txt   text
+
+# Windows-only scripts keep CRLF in the working tree (still LF in the repository).
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binary formats: never convert line endings or produce textual diffs.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pdf   binary
+*.zip   binary
+*.npz   binary
+*.npy   binary
+*.avi   binary
+*.mp4   binary
+*.pkl   binary
+*.pt    binary
+*.pth   binary
+*.onnx  binary
