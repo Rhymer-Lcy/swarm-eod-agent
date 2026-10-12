@@ -88,6 +88,21 @@ def test_repository_errors_block_the_build(make_repo, tmp_path):
         build(repo, tmp_path)
 
 
+def test_non_ascii_paths_are_stored_under_recorded_ascii_aliases(make_repo, tmp_path):
+    repo = make_repo()
+    evidence = tmp_path / "evidence"
+    original = "notes/" + "说明" + "-guide.md"
+    write_files(evidence, {original: "text\n"})
+    package = build(repo, tmp_path, "--evidence-dir", str(evidence))
+    with zipfile.ZipFile(package) as zf:
+        names = zf.namelist()
+        assert all(n.isascii() for n in names)
+        aliases = json.loads(zf.read("MANIFEST.json"))["path_aliases"]
+        alias = aliases["evidence/" + original]
+        assert alias.startswith("evidence/notes/guide-") and alias.endswith(".md")
+        assert zf.read(alias) == b"text\n"
+
+
 def test_selected_baseline_files_are_included_and_validated(make_repo, tmp_path):
     repo = make_repo()
     package = build(repo, tmp_path, "--baseline-file", "tools/legacy.py")

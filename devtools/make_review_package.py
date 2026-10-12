@@ -129,7 +129,21 @@ def stage_package(
     state: Dict[str, object],
     generated_at: datetime,
 ) -> None:
+    aliases: Dict[str, str] = {}
+
     def write(rel: str, data: bytes) -> None:
+        # Some unzip tools ignore the ZIP UTF-8 name flag and mangle non-ASCII
+        # names, which breaks `sha256sum -c`. Such paths are stored under an
+        # ASCII alias and the mapping is recorded in MANIFEST.json.
+        if not rel.isascii():
+            parent, _, name = rel.rpartition("/")
+            parent = "/".join(p if p.isascii() else "x" + hashlib.sha256(p.encode()).hexdigest()[:8]
+                              for p in parent.split("/")) if parent else ""
+            stem, dot, suffix = name.rpartition(".")
+            safe = "".join(c for c in (stem if dot else name) if c.isascii()).strip("-_. ")
+            alias = (f"{safe}-" if safe else "") + hashlib.sha256(rel.encode()).hexdigest()[:8]
+            alias += f".{suffix}" if dot and suffix.isascii() else ""
+            aliases[rel] = rel = (parent + "/" if parent else "") + alias
         target = stage / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
@@ -200,6 +214,7 @@ def stage_package(
         "project_changes": [{"status": s, "path": p} for s, p in changes],
         "evidence_files": copied,
         "baseline_files_included": sorted(baseline_files),
+        "path_aliases": dict(sorted(aliases.items())),
     }
     write("MANIFEST.json", (json.dumps(manifest, indent=1) + "\n").encode("utf-8"))
 
@@ -213,7 +228,7 @@ are open. Then:
 
 | Path | Content |
 |---|---|
-| `MANIFEST.json` | Phase, timestamps, commit, tree, dirty state, file lists |
+| `MANIFEST.json` | Phase, timestamps, commit, tree, dirty state, file lists; `path_aliases` maps original non-ASCII paths to the ASCII names stored here |
 | `git/project-changes.patch` | Every change made on top of the supplied baseline (`{base}`) |
 | `git/log.txt`, `git/status.txt`, `git/refs.txt` | History, working-tree status and refs |
 | `source/` | Each added or modified file as committed at HEAD; `CHANGES.txt` lists them |
