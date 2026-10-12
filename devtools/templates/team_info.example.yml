@@ -1,0 +1,20 @@
+# Team identity template for src/swarm_rescue/solutions/team_info.yml.
+#
+# The launcher and the official submission tooling read
+# src/swarm_rescue/solutions/team_info.yml. That file is deliberately untracked
+# (see .gitignore) so that the registered team identity never enters the public
+# repository. To set up a fresh clone:
+#
+#   cp devtools/templates/team_info.example.yml src/swarm_rescue/solutions/team_info.yml
+#
+# Then replace the placeholder values locally with the registered team details.
+# Field rules enforced by src/swarm_rescue/submission_check.py:
+#   team_number  integer in 0..999, equal to NNN in teamNNN_<step>.zip
+#   team_name    non-empty; create_zip_submission.sh reads only its first
+#                whitespace-separated token, so prefer a single token
+#   team_members non-empty, comma-separated
+# The placeholder below is valid for local simulation only and must never be
+# used for a real submission.
+team_number: 0
+team_name: PLACEHOLDER-TEAM
+team_members: placeholder-member-a, placeholder-member-b
