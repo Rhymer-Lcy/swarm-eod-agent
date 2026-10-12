@@ -1,5 +1,8 @@
 # Phase 0 completion report
 
+The final section, [Phase 0.1](#phase-01-hardening-memory-isolation-and-publication),
+supersedes the Phase 0 disposition, blocker table and entry conditions below.
+
 Business date 2026-10-12 (UTC+8). Scope: workspace initialization, source
 preservation, Git preparation, environment audit, documentation, compliance
 review and limited baseline validation. No agent strategy was developed,
@@ -65,3 +68,29 @@ Entry conditions:
    PDF as the scoring authority and does not rely on D1.
 5. The real team identity is written locally (B6) before the first packaging
    rehearsal.
+
+## Phase 0.1: hardening, memory isolation and publication
+
+Business date 2026-10-12 (UTC+8). This was the last pre-competition
+preparation task. **Disposition: PASS WITH EXTERNAL LIMITATIONS.**
+
+| Item | Result |
+|---|---|
+| Project memory | development tooling auto-memory redirected to the ignored `private project memory` by the ignored `private local configuration`; verified with a session started in the repository (see `local project instructions`, "Project memory") |
+| Server policy | NUMA node 0 only, defer otherwise (node 1 is never a fallback); GPUs checked before use, idleness is not allocation; EGL device mapping unresolved ([ENVIRONMENT.md](ENVIRONMENT.md)) |
+| Scoring questions | Draft for the organizer, not sent: [ORGANIZER_QUESTIONS.md](ORGANIZER_QUESTIONS.md) |
+| Setup | Windows, online Ubuntu and offline Ubuntu procedures; lock files still not validated by a clean install |
+| Hygiene scanner | `--history` now also scans commit messages, identities and tag annotations |
+| Publication | Public repository https://github.com/Rhymer-Lcy/swarm-eod-agent, verified by API, anonymous web access and an anonymous clone ([WORKFLOW.md](WORKFLOW.md)) |
+| Tests | Devtools suite 23/23 on the workstation; GPU and simulation tests were not re-run (no change touched them) |
+
+Resolved from the Phase 0 table: B1 (publication decided; organizer question
+Q8 remains open) and B5 as a policy matter (runs defer unless node 0 is
+confirmed free). Still open and external: B2-B4 (organizer answers), B6 (the
+real team identity, entered locally by the owner when needed), the evaluator
+image's package versions and OpenGL implementation, and a clean-install
+validation of the lock files.
+
+**Stop.** No agent algorithm, strategy or simulation campaign has been
+started. Phase 1 begins only on an explicit instruction from the owner, with
+the entry conditions above (items 1, 2, 4 and 5 still apply; item 3 is done).

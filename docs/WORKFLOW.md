@@ -84,8 +84,14 @@ with the SSH or HTTPS URL, then `git push -u origin main` and
 `gh api repos/<owner>/swarm-eod-agent/commits --jq '.[0].author.login'`.
 Mistakes are corrected with new commits, never by force-pushing.
 
-**Status at the end of Phase 0: HELD.** Item 1 is unresolved. Nothing has
-been created on or pushed to GitHub.
+**Status: PUBLISHED (Phase 0.1, 2026-10-12).** The gate was re-run over the
+full history, including commit and tag metadata, with no errors; the owner
+authorized publication; the basis is recorded in [PROVENANCE.md](PROVENANCE.md).
+`https://github.com/Rhymer-Lcy/swarm-eod-agent` is public, default branch
+`main`, remote `origin` over SSH. `main` and the tag `baseline-supplied-5.1.3`
+were pushed; an anonymous clone reproduced the local commit and tree. GitHub's
+license detector reports `NOASSERTION` because the supplied `LICENSE` adds an
+attribution paragraph after the MIT text; the file is kept verbatim.
 
 ## Review packages
 
