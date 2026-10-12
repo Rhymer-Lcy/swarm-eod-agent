@@ -108,3 +108,20 @@ def test_allowed_and_disallowed_email_addresses(make_repo, tmp_path):
     assert scan(repo, tmp_json=out) == 0  # e-mail addresses are warnings, not errors
     hits = [f for f in findings(out) if f["rule"] == "email-address"]
     assert [(h["severity"], h["line"]) for h in hits] == [("WARN", 2)]
+
+
+def test_history_scans_commit_messages_and_tag_annotations(make_repo, tmp_path):
+    repo = make_repo()
+    out = tmp_path / "h.json"
+    assert scan(repo, "--history", tmp_json=out) == 0
+    run_git(repo, "commit", "-q", "--allow-empty", "-m", f"chore: deploy to {PRIVATE_IP}")
+    assert scan(repo, tmp_json=out) == 0  # HEAD file contents are still clean
+    assert scan(repo, "--history", tmp_json=out) == 1
+    hits = [f for f in findings(out) if f["path"] == "<git-metadata>"]
+    assert [h["rule"] for h in hits] == ["infra:private-ipv4"]
+    run_git(repo, "commit", "-q", "--amend", "--allow-empty", "-m", "chore: clean message")
+    run_git(repo, "tag", "-a", "v0", "-m", f"token {FAKE_TOKEN}")
+    assert scan(repo, "--history", tmp_json=out) == 1
+    hits = [f for f in findings(out) if f["path"] == "<git-metadata>"]
+    assert [h["rule"] for h in hits] == ["secret:github-token"]
+    assert FAKE_TOKEN not in out.read_text(encoding="utf-8")

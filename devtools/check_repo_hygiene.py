@@ -15,6 +15,10 @@ not be published or shared:
   that this tracked script never carries the strings it protects;
 * unusually large blobs.
 
+With ``--history`` the commit messages, author and committer identities and
+tag annotations of every ref are scanned as well, because a push publishes
+them together with the files.
+
 Files byte-identical to the supplied competition baseline (tag
 ``baseline-supplied-5.1.3``) are classified separately: their content was
 supplied as-is and is reviewed under the redistribution question, not edited.
@@ -29,6 +33,7 @@ Standard library only; Python 3.8 or newer.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import subprocess
@@ -165,6 +170,19 @@ def _history_entries(repo: Path) -> List[Tuple[str, str]]:
     return [(path, sha) for sha, path in seen.items()]
 
 
+def history_metadata_blob(repo: Path) -> Blob:
+    """Commit messages, author and committer identities, and tag annotations.
+
+    These are published with the history but are not file contents, so they
+    are scanned as one synthetic text under the path ``<git-metadata>``.
+    """
+    commits = _git(["log", "--all", "--format=commit %H%nauthor %an <%ae>%n"
+                    "committer %cn <%ce>%n%B%n"], repo=repo)
+    tags = _git(["for-each-ref", "refs/tags", "--format=tag %(refname)%n"
+                 "tagger %(taggername) %(taggeremail)%n%(contents)%n"], repo=repo)
+    return Blob(path="<git-metadata>", sha=None, data=commits + tags)
+
+
 def _directory_blobs(root: Path) -> Iterator[Blob]:
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         yield Blob(path=path.relative_to(root).as_posix(), sha=None, data=path.read_bytes())
@@ -285,7 +303,8 @@ def run(argv: Optional[Sequence[str]] = None) -> int:
         blobs = _read_blobs(_index_entries(repo), repo)
     elif args.history:
         mode = "history"
-        blobs = _read_blobs(_history_entries(repo), repo)
+        blobs = itertools.chain(_read_blobs(_history_entries(repo), repo),
+                                [history_metadata_blob(repo)])
     else:
         rev = args.rev or "HEAD"
         mode = f"rev:{rev}"

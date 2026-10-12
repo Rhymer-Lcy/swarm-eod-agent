@@ -177,9 +177,11 @@ def stage_package(
     baseline_map = hygiene._baseline_map(repo)
     for label, entries in (("head", hygiene._tree_entries("HEAD", repo)),
                            ("history", hygiene._history_entries(repo))):
+        blobs = list(hygiene._read_blobs(entries, repo))
+        if label == "history":
+            blobs.append(hygiene.history_metadata_blob(repo))
         findings, scanned = hygiene.scan_blobs(
-            hygiene._read_blobs(entries, repo), baseline=baseline_map,
-            private_patterns=patterns)
+            blobs, baseline=baseline_map, private_patterns=patterns)
         counts = {sev: sum(1 for f in findings if f.severity == sev)
                   for sev in ("ERROR", "WARN", "INFO")}
         report = {"mode": label, "files_scanned": scanned, "counts": counts,
