@@ -14,8 +14,16 @@ environment, which changes no project or framework code:
     PYGLET_HEADLESS=True PYGLET_HEADLESS_DEVICE=0 python devtools/probe_opengl.py
 
 It then compiles the baseline compute shader with small placeholder sizes and
-prints one JSON object. Exit status: 0 when an OpenGL 4.4+ context was created
-and the shader compiled, 1 otherwise. Nothing is written to disk.
+prints one JSON object. Exit status: 0 when the shader compiled, 1 otherwise.
+Nothing is written to disk.
+
+The reported ``gl_version`` is the version of the context arcade obtained, not
+the driver's maximum: arcade requests a 3.3 core context. On Windows (WGL) the
+NVIDIA driver returned 4.6 for that request; under Linux EGL headless it
+returned exactly 3.3 while still compiling and running the 4.40 compute shader.
+``context_reports_4_4`` records which case applies. Shader compilation is
+necessary but not sufficient: the functional check is the baseline's GPU/CPU
+ray parity test, ``tests/test_ray_compute_gpu_cpu.py``.
 """
 
 from __future__ import annotations
@@ -67,16 +75,17 @@ def main() -> int:
             for placeholder, value in (("N_SENSORS", 2), ("MAX_N_RAYS", 181),
                                        ("MAX_N_INVISIBLE", 4)):
                 source = source.replace(placeholder, str(value))
+            report["context_reports_4_4"] = tuple(ctx.gl_version) >= (4, 4)
             ctx.compute_shader(source=source)
             report["compute_shader_compiled"] = True
-            ok = tuple(ctx.gl_version) >= (4, 4)
+            ok = True
         finally:
             window.close()
     except Exception as exc:  # report the failure instead of a traceback
         report["error"] = f"{type(exc).__name__}: {exc}"
         report.setdefault("compute_shader_compiled", False)
     report["seconds"] = round(time.perf_counter() - started, 3)
-    report["opengl_ok"] = ok
+    report["shader_ok"] = ok
     print(json.dumps(report, sort_keys=True))
     return 0 if ok else 1
 
