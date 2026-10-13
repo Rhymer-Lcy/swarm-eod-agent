@@ -20,6 +20,12 @@ set -euo pipefail
 : "${CPUSET:?set CPUSET to a CPU list on NUMA node 0}"
 : "${PYTHON:?set PYTHON to the project environment interpreter}"
 
+# Re-run this wrapper itself pinned, so that the gate and every helper
+# process stay on the permitted CPUs as well, not only the command.
+if [ -z "${_REMOTE_CPU_PINNED:-}" ]; then
+    _REMOTE_CPU_PINNED=1 exec taskset -c "$CPUSET" bash "$0" "$@"
+fi
+
 timeout_s="$1"
 shift
 
