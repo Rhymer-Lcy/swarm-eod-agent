@@ -1,4 +1,4 @@
-"""Blue (rescue) brain, candidate B1 (B0 and B0.1 in Phase 1).
+"""Blue (rescue) brain, candidate B2 (B1 in Phase 2, B0 and B0.1 in Phase 1).
 
 Every drone runs the same decentralised policy:
 
@@ -14,15 +14,20 @@ Every drone runs the same decentralised policy:
 * fetch and grasp: travel along the geodesic path; once the bomb is in view,
   steer on the live relative detection (immune to the slowly varying GPS
   error), face it and hold the grasper on until it attaches;
-* carry and deliver: follow the geodesic field to the disposal center, in
-  which unobserved cells cost more than for unloaded travel (a carrying
-  drone is slow, so a route that flips when a wall appears is expensive),
-  and drive the side on which the bomb was grasped into the nearest surface
-  point of the center, taken from this step's detections when the center is
-  in view and from the stored model otherwise; a detachment next to the
-  center counts as a delivery, anywhere else as a drop that is re-queued.
-  Surface points enter the stored model only while the heading estimate is
-  trusted.
+* carry and deliver (B2): follow the geodesic field to stand-off positions
+  witnessed by the drone's own detections of the center (``delivery.py``:
+  each lies on a segment along which the center was seen, so never behind a
+  wall), in which unobserved cells cost more than for unloaded travel (a
+  carrying drone is slow, so a route that flips when a wall appears is
+  expensive). The terminal push drives the side on which the bomb was
+  grasped into the center only with a line-of-sight certificate at every
+  distance: a surface point detected in this step (walls stop semantic rays)
+  whose segment the map does not block, or the surface point of the
+  witnessed stand-off the drone stands on. Without progress near the center
+  the approach area is excluded for a while and the route re-planned. A
+  detachment next to the center counts as a delivery, anywhere else as a
+  drop that is re-queued. Surface points enter the stored model only while
+  the heading estimate is trusted.
 
 Missing sensors, missing messages or an unknown disposal center degrade the
 behaviour (dead reckoning, local decisions, return towards the start area)
@@ -39,6 +44,7 @@ import numpy as np
 from . import params as P
 from .base import BrainBase
 from .comms import make_message, numeric_tuple, valid_messages
+from .delivery import ApproachSet, radial_sources
 from .geometry import wrap
 from .motion import LocalView, drive, lookahead_point, rotation_toward
 from .observation import Command, Observation
@@ -51,12 +57,17 @@ CLAIM_TIMEOUT = 40
 CLAIM_PERIOD = 8
 EXPLORE_PERIOD = 40
 DELIVER_RANGE = 100.0
-DELIVER_TIMEOUT = 160
 FLEET_MAX_AGE = 200
 DIGEST_MEMORY = 4096      # remembered digest items before the set is reset
 DC_RECORD_HEADING_SIGMA = math.radians(8.0)
 CARRY_UNKNOWN_COST = 10.0  # carry routes prefer observed free space (default 3)
 LIVE_AIM_RANGE = 120.0
+TERMINAL_STOP = 14.0       # the last part of a terminal segment lies on the mapped center
+DC_FIELD_PERIOD = 60       # steps between refreshes of the center's field
+APPROACH_PATIENCE = 160    # steps near the center without progress before a re-plan
+PROGRESS_RANGE = 150.0     # distance to the center within which progress is watched
+PROGRESS_EPS = 5.0         # px of distance gain that count as progress
+PROGRESS_MOVE = 80.0       # a drone that moved this far is travelling, not stuck
 
 
 class Bomb:
@@ -131,18 +142,22 @@ class RescueBrain(BrainBase):
         self.carried: Optional[Bomb] = None
         self.carried_from: Optional[Tuple[float, float]] = None
         self.grasp_side = 0.0
-        self.deliver_start = -1
-        self.deliver_aim: Optional[Tuple[float, float]] = None
-        self.bad_aims: List[Tuple[float, float]] = []
         self.was_grasping = False
         self.disposals: List[Tuple[float, float, int]] = []
         self.detections: List[BombDetection] = []
         self._digest_seen: set = set()
         self.dc_live: List[Tuple[float, float]] = []
+        self.approach = ApproachSet()
         self._dc_field: Optional[np.ndarray] = None
         self._dc_field_step = -10_000
+        self._dc_field_version = -1
+        self._relaxed = False      # every supported stand-off is penalized
+        # Progress watch near the center: best distance, its step and position.
+        self.progress: Optional[Tuple[float, int, float, float]] = None
         self.diag.update({"grasps": 0, "disposed": 0, "drops": 0, "grasp_timeouts": 0,
-                          "deliver_retries": 0, "claims": 0, "yields": 0, "live_aims": 0})
+                          "claims": 0, "yields": 0, "live_aims": 0, "witness_aims": 0,
+                          "approach_failures": 0, "relaxed_sources": 0,
+                          "radial_fallbacks": 0, "terminal_blocked": 0})
 
     # ------------------------------------------------------------------ API
     def step(self, obs: Observation) -> Command:
@@ -163,6 +178,7 @@ class RescueBrain(BrainBase):
                     "bombs_free": sum(b.status == 0 for b in self.bombs.items),
                     "bombs_gone": sum(b.status == 2 for b in self.bombs.items),
                     "dc_points": len(self.dc.points),
+                    "approach_witnesses": len(self.approach),
                     "est_disturbances": self.est.disturbance_count,
                     "est_carry_odometer_steps": self.est.carry_odometer_steps,
                     "est_carry_model_steps": self.est.carry_model_steps})
@@ -234,11 +250,13 @@ class RescueBrain(BrainBase):
     # ------------------------------------------------------------ perception
     def _perceive(self, obs: Observation) -> None:
         est = self.est
+        self.dc_live = live_surface_points(est.x, est.y, est.heading, obs.semantic)
         # Surface points recorded during a large heading error would persist
         # as outliers of the center model; record only with a trusted heading.
         if est.heading_sigma < DC_RECORD_HEADING_SIGMA:
             self.dc.observe(est.x, est.y, est.heading, obs.semantic)
-        self.dc_live = live_surface_points(est.x, est.y, est.heading, obs.semantic)
+            if self.dc_live:
+                self.approach.observe(self.grid, est.x, est.y, self.dc_live, obs.step)
         self.detections = []
         if obs.semantic is not None:
             self.detections = bomb_detections(est.x, est.y, est.heading, obs.semantic,
@@ -315,8 +333,7 @@ class RescueBrain(BrainBase):
         self.carried_from = (target.x, target.y)
         self.claim = None
         self.path = []
-        self.deliver_start = -1
-        self.deliver_aim = None
+        self.progress = None
 
     def _on_release(self, obs: Observation) -> None:
         a = self.est.heading + self.grasp_side
@@ -443,7 +460,9 @@ class RescueBrain(BrainBase):
             self.state = "carry"
             target = self.home
         else:
-            if self.dc.distance(est.x, est.y) < DELIVER_RANGE:
+            dist = self.dc.distance(est.x, est.y)
+            self._watch_progress(obs, dist)
+            if dist < DELIVER_RANGE:
                 deliver = self._deliver(obs, view)
                 if deliver is not None:
                     return deliver
@@ -457,26 +476,64 @@ class RescueBrain(BrainBase):
         self.target = target
         return cmd
 
+    def _watch_progress(self, obs: Observation, dist: float) -> None:
+        """Re-plan when a carrier near the center stops getting closer.
+
+        Progress is a gain of ``PROGRESS_EPS`` in distance to the center; a
+        drone that has moved ``PROGRESS_MOVE`` since the last progress is
+        travelling (for example around a wall) and restarts the window.
+        """
+        est, now = self.est, obs.step
+        if dist > PROGRESS_RANGE:
+            self.progress = None
+            return
+        p = self.progress
+        if p is None or dist < p[0] - PROGRESS_EPS or \
+                math.hypot(est.x - p[2], est.y - p[3]) > PROGRESS_MOVE:
+            self.progress = (dist, now, est.x, est.y)
+            return
+        if now - p[1] > APPROACH_PATIENCE:
+            # The approach used here does not work: exclude stand-offs around
+            # this position (longer after repeated failures) and re-plan.
+            self.approach.penalize(est.x, est.y, now)
+            self.diag["approach_failures"] += 1
+            self.progress = (dist, now, est.x, est.y)
+            self._dc_field = None
+            self.path = []
+
+    def _terminal_aim(self, obs: Observation) -> Optional[Tuple[float, float]]:
+        """Aim of the terminal push, only with a line-of-sight certificate.
+
+        Walls stop semantic rays, so a surface point detected in this step is
+        in sight; it is used when the map does not block its segment either.
+        Without such a detection, the drone must stand on a witnessed
+        stand-off, whose surface point was seen from there. No distance
+        exempts the check. Inside an area where an approach failed recently
+        there is no terminal push (the field leads to another stand-off),
+        unless every approach has failed (relaxed goals).
+        """
+        est = self.est
+        if not self._relaxed and self.approach.penalized_at(est.x, est.y, obs.step):
+            return None
+        live = sorted(self.dc_live, key=lambda p: (p[0] - est.x) ** 2 + (p[1] - est.y) ** 2)
+        for px, py in live[:3]:
+            if math.hypot(px - est.x, py - est.y) >= LIVE_AIM_RANGE:
+                break
+            if self.grid.clear_along(est.x, est.y, px, py, stop_short=TERMINAL_STOP):
+                self.diag["live_aims"] += 1
+                return px, py
+        aim = self.approach.at_standoff(self.grid, est.x, est.y, obs.step)
+        if aim is not None and self.grid.clear_along(est.x, est.y, aim[0], aim[1],
+                                                     stop_short=TERMINAL_STOP):
+            self.diag["witness_aims"] += 1
+            return aim
+        return None
+
     def _deliver(self, obs: Observation, view: LocalView) -> Optional[Command]:
         est = self.est
-        if self.deliver_aim is None or obs.step - self.deliver_start > DELIVER_TIMEOUT:
-            if self.deliver_aim is not None:
-                self.diag["deliver_retries"] += 1
-                self.bad_aims.append(self.deliver_aim)
-            self.deliver_aim = self._choose_aim()
-            self.deliver_start = obs.step
-        aim = self.deliver_aim
-        if self.dc_live:
-            # Final approach on this step's detections of the center, which
-            # are immune to errors stored in the center model.
-            live = min(self.dc_live, key=lambda p: (p[0] - est.x) ** 2 + (p[1] - est.y) ** 2)
-            if math.hypot(live[0] - est.x, live[1] - est.y) < LIVE_AIM_RANGE:
-                aim = live
-                self.diag["live_aims"] += 1
+        aim = self._terminal_aim(obs)
         if aim is None:
-            return None
-        if math.hypot(aim[0] - est.x, aim[1] - est.y) > 50.0 and \
-                not self.grid.clear_along(est.x, est.y, aim[0], aim[1], stop_short=24.0):
+            self.diag["terminal_blocked"] += 1
             return None
         self.state = "deliver"
         bearing = math.atan2(aim[1] - est.y, aim[0] - est.x)
@@ -489,19 +546,6 @@ class RescueBrain(BrainBase):
         cmd.forward, cmd.lateral = f, l
         self.target = aim
         return cmd
-
-    def _choose_aim(self) -> Optional[Tuple[float, float]]:
-        est = self.est
-        pts = [p for p in self.dc.points
-               if all(math.hypot(p[0] - q[0], p[1] - q[1]) > 25.0 for q in self.bad_aims)]
-        if not pts:
-            self.bad_aims = []
-            pts = self.dc.points
-        if not pts:
-            return None
-        arr = np.asarray(pts)
-        i = int(np.argmin((arr[:, 0] - est.x) ** 2 + (arr[:, 1] - est.y) ** 2))
-        return float(arr[i, 0]), float(arr[i, 1])
 
     def _explore(self, obs: Observation, view: LocalView, others) -> Command:
         now = obs.step
@@ -524,29 +568,40 @@ class RescueBrain(BrainBase):
         f, l, _ = drive(self.est, target, view, cruise=4.0, carrying=False, others=others)
         return Command(forward=f, lateral=l)
 
+    def _dc_sources(self, now: int) -> List[Tuple[int, int]]:
+        """Goal cells of the carry field: witnessed stand-offs, else map-checked radial ones."""
+        cells, relaxed = self.approach.sources(self.grid, now)
+        self._relaxed = relaxed
+        if relaxed:
+            self.diag["relaxed_sources"] += 1
+        if cells:
+            return cells
+        box = self.dc.bbox()
+        if box is None:
+            return []
+        self.diag["radial_fallbacks"] += 1
+        return radial_sources(self.grid, self.dc.points, box)
+
     def _path_target_dc(self, obs: Observation) -> Tuple[float, float]:
         est = self.est
         now = obs.step
-        if self._dc_field is None or now - self._dc_field_step > 60:
-            box = self.dc.bbox()
-            cells = []
-            if box is not None:
-                cx, cy = (box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0
-                for px, py in self.dc.points[::5] or [(cx, cy)]:
-                    dx, dy = px - cx, py - cy
-                    norm = math.hypot(dx, dy) or 1.0
-                    cells.append(self.grid.to_cell(px + 32.0 * dx / norm, py + 32.0 * dy / norm))
-            self._dc_field = self.planner.field(sorted(set(cells)), allow_unknown=True, step=now,
-                                               unknown_cost=CARRY_UNKNOWN_COST)
+        if self._dc_field is None or now - self._dc_field_step > DC_FIELD_PERIOD or \
+                self._dc_field_version != self.approach.version:
+            self._dc_field = self.planner.field(self._dc_sources(now), allow_unknown=True,
+                                               step=now, unknown_cost=CARRY_UNKNOWN_COST)
             self._dc_field_step = now
+            self._dc_field_version = self.approach.version
         cells = self.planner.descend(self._dc_field, self.grid.to_cell(est.x, est.y), max_len=12)
         if len(cells) >= 2:
             path = [self.grid.to_world(r, c) for r, c in cells]
             return lookahead_point(path, est.x, est.y, P.WAYPOINT_LOOKAHEAD,
                                    lambda px, py: self.grid.clear_along(est.x, est.y, px, py))
-        surface = self.dc.nearest_surface(est.x, est.y)
-        if surface is None:
+        if cells:
+            # At a goal cell: hold here; the terminal push starts when a
+            # certificate exists, and the progress watch re-plans if it never
+            # does. Never push straight at a surface point through whatever
+            # lies between.
             return est.x, est.y
-        # No route in the center's field: plan to the surface point from here
-        # rather than pushing straight at it through whatever lies between.
-        return self._path_target(obs, surface)
+        # No route to any goal in the current map: head for the start area,
+        # which keeps the drone moving and mapping until a route appears.
+        return self._path_target(obs, self.home) if self.home else (est.x, est.y)
