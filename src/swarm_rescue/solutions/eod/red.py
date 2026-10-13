@@ -1,4 +1,4 @@
-"""Red (place) brain, candidate R0.
+"""Red (place) brain, candidate R2 (R1 in Phase 2, R0 and R0.1 in Phase 1).
 
 Schedule (fractions of the step limit T; the time score is full when the map
 is submitted by 0.5 T):
@@ -10,8 +10,10 @@ is submitted by 0.5 T):
   free spot with the highest marginal blast coverage of the walls on its
   current team map (border walls weigh 0.5), net of travel cost and with a
   mild preference for spots far from the disposal center; spots are claimed
-  over the radio, the lower identifier keeps a contested area; after placing,
-  the drone resumes exploring;
+  over the radio and the claims are relayed with their age (R2), the lower
+  identifier keeps a contested area, and a target is given up as soon as a
+  known placed bomb lies within the overlap distance of it (R2); after
+  placing, the drone resumes exploring;
 * 0.40 T onwards, rally: everybody returns towards the start area so that
   the team's evidence snapshots reach the leader (the lowest identifier
   heard from recently); the leader submits once it holds a fresh snapshot of
@@ -32,7 +34,7 @@ import numpy as np
 
 from . import params as P
 from .base import BrainBase
-from .comms import make_message, valid_messages
+from .comms import make_message, numeric_tuple, valid_messages
 from .motion import LocalView, drive
 from .observation import Command, Observation
 from .perception import bomb_detections, entity_mask
@@ -47,6 +49,8 @@ PLACE_DECISION_PERIOD = 60
 COVER_SCALE = 4
 TRAVEL_WEIGHT = 0.3
 FAR_BONUS = 0.12
+CLAIM_TTL = 80             # steps a (possibly relayed) placement claim stays valid
+OVERLAP = 0.8              # targets closer than this many blast radii overlap
 
 
 class PlaceBrain(BrainBase):
@@ -81,7 +85,7 @@ class PlaceBrain(BrainBase):
         self.submitted = False
         self.final_map: Optional[np.ndarray] = None
         self.diag.update({"placed": 0, "place_retries": 0, "emergency_drops": 0,
-                          "snapshots_held": 0, "submit_reason": ""})
+                          "snapshots_held": 0, "submit_reason": "", "targets_dropped": 0})
 
     # ------------------------------------------------------------------ API
     def step(self, obs: Observation) -> Command:
@@ -130,11 +134,17 @@ class PlaceBrain(BrainBase):
             for item in msg.get("pl", ()):
                 if isinstance(item, tuple) and len(item) == 2:
                     self._add_placed(float(item[0]), float(item[1]))
+            # Claims carry the step at which their owner made them, so a
+            # relayed copy never outlives the owner's newer statement.
+            sent = int(msg["t"])
             claim = msg.get("pc")
             if isinstance(claim, tuple) and len(claim) == 2:
-                self.place_claims[sender] = (float(claim[0]), float(claim[1]), now)
-            elif sender in self.place_claims:
+                self._merge_claim(sender, float(claim[0]), float(claim[1]), sent)
+            elif sender in self.place_claims and self.place_claims[sender][2] <= sent:
                 del self.place_claims[sender]
+            for item in msg.get("pr", ()):
+                if numeric_tuple(item, 4) and int(item[0]) not in (self.id, sender):
+                    self._merge_claim(int(item[0]), float(item[1]), float(item[2]), int(item[3]))
             snap = msg.get("sn")
             if isinstance(snap, tuple) and len(snap) == 3 and isinstance(snap[2], bytes):
                 source, step = int(snap[0]), int(snap[1])
@@ -163,11 +173,18 @@ class PlaceBrain(BrainBase):
             pl=tuple((round(x, 1), round(y, 1)) for x, y in self.placed[-30:]),
             pc=(round(self.place_target[0], 1), round(self.place_target[1], 1))
             if self.place_target else None,
+            pr=tuple((k, round(v[0], 1), round(v[1], 1), v[2])
+                     for k, v in self.place_claims.items() if now - v[2] < CLAIM_TTL),
             sn=snap, inv=int(obs.inventory),
             dc=tuple(round(v, 1) for v in box) if box else None,
             cv=self._coverage_message(now))
 
     # ------------------------------------------------------------ perception
+    def _merge_claim(self, owner: int, x: float, y: float, step: int) -> None:
+        known = self.place_claims.get(owner)
+        if known is None or known[2] < step:
+            self.place_claims[owner] = (x, y, step)
+
     def _add_placed(self, x: float, y: float) -> None:
         if all(math.hypot(x - a, y - b) > 30.0 for a, b in self.placed):
             self.placed.append((x, y))
@@ -273,10 +290,18 @@ class PlaceBrain(BrainBase):
         est = self.est
         now = obs.step
         if self.place_target is not None:
+            tx, ty = self.place_target
+            near = OVERLAP * self.blast_radius
+            # A bomb placed meanwhile next to the target makes it redundant
+            # (gossiped placements arrive after the target was chosen).
+            if any(math.hypot(bx - tx, by - ty) < near for bx, by in self.placed):
+                self.diag["targets_dropped"] += 1
+                self.place_target = None
+        if self.place_target is not None:
             for other, (cx, cy, step) in self.place_claims.items():
-                if other < self.id and now - step < 40 and \
+                if other < self.id and now - step < CLAIM_TTL and \
                         math.hypot(cx - self.place_target[0], cy - self.place_target[1]) \
-                        < 0.8 * self.blast_radius:
+                        < OVERLAP * self.blast_radius:
                     self.place_target = None
                     break
         if now < self.t_place + 15 * self.id:
@@ -324,7 +349,7 @@ class PlaceBrain(BrainBase):
         r_small = self.blast_radius / s
         covered = np.zeros_like(weights, dtype=np.uint8)
         taken = list(self.placed) + [(v[0], v[1]) for k, v in self.place_claims.items()
-                                     if now - v[2] < 60]
+                                     if now - v[2] < CLAIM_TTL]
         for bx, by in taken:
             cx = int((bx + self.size[0] / 2.0) / s)
             cy = int((self.size[1] / 2.0 - by) / s)
