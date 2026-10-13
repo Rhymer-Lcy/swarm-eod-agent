@@ -12,6 +12,9 @@
 # caps, no user site packages, no bytecode files and a hard timeout. Set
 # REPO_DIR to run from another checkout of the repository (for example a
 # scratch worktree); its src/ then takes precedence on the import path.
+# Set INTERPRETER=bash to run a batch script (for example
+# devtools/simlab/delivery_batch.sh) under the same gate and limits; the
+# gate itself always runs with PYTHON.
 set -euo pipefail
 
 : "${CPUSET:?set CPUSET to a CPU list on NUMA node 0}"
@@ -34,7 +37,7 @@ if ! "$PYTHON" -m devtools.simlab.occupancy --cpus "$CPUSET" --cpu-only; then
 fi
 
 set +e
-timeout --kill-after=10 "$timeout_s" taskset -c "$CPUSET" "$PYTHON" "$@"
+timeout --kill-after=10 "$timeout_s" taskset -c "$CPUSET" "${INTERPRETER:-$PYTHON}" "$@"
 rc=$?
 set -e
 echo "EXIT $rc"
