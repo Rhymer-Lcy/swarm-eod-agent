@@ -52,6 +52,9 @@ FAR_BONUS = 0.12
 class PlaceBrain(BrainBase):
     SEARCH_RANGE = 130.0
     FREE_RANGE = 180.0
+    SHARE_COVERAGE = True
+    COMMIT_TARGETS = True
+    COVERAGE_DROPS_FRONTIER = False    # red maps walls: unmapped space stays a target
 
     def __init__(self, identifier: int, n_drones: int, size_area: Tuple[int, int],
                  max_steps: Optional[int], max_walltime: Optional[float]) -> None:
@@ -87,6 +90,7 @@ class PlaceBrain(BrainBase):
         now = obs.step
         self._read_messages(obs)
         self._perceive(obs)
+        self._coverage_tick(now)
         self._track_inventory(obs)
         cmd = self._decide(obs)
         if not self.submitted and self._should_submit(obs):
@@ -109,7 +113,10 @@ class PlaceBrain(BrainBase):
         out = dict(self.diag)
         out.update({"phase": self.phase, "evidence_hits": self.evidence.total,
                     "snapshots_held": len(self.snapshots), "known_placed": len(self.placed),
-                    "est_disturbances": self.est.disturbance_count})
+                    "est_disturbances": self.est.disturbance_count,
+                    "team_coverage": round(self.coverage.fraction, 3),
+                    "coverage_merged": self.coverage.merged_messages,
+                    "coverage_rejected": self.coverage.rejected_messages})
         return out
 
     # ------------------------------------------------------------- messages
@@ -119,6 +126,7 @@ class PlaceBrain(BrainBase):
             sender = msg["id"]
             self.team.update(msg, now)
             self._read_fleet(msg)
+            self._read_coverage(msg)
             for item in msg.get("pl", ()):
                 if isinstance(item, tuple) and len(item) == 2:
                     self._add_placed(float(item[0]), float(item[1]))
@@ -156,7 +164,8 @@ class PlaceBrain(BrainBase):
             pc=(round(self.place_target[0], 1), round(self.place_target[1], 1))
             if self.place_target else None,
             sn=snap, inv=int(obs.inventory),
-            dc=tuple(round(v, 1) for v in box) if box else None)
+            dc=tuple(round(v, 1) for v in box) if box else None,
+            cv=self._coverage_message(now))
 
     # ------------------------------------------------------------ perception
     def _add_placed(self, x: float, y: float) -> None:
@@ -240,10 +249,10 @@ class PlaceBrain(BrainBase):
         return cmd
 
     def _explore(self, obs: Observation, view: LocalView, others) -> Command:
-        est = self.est
         now = obs.step
-        if (self.state != "explore" or self.target is None or now - self.goal_step > 40
-                or math.hypot(self.target[0] - est.x, self.target[1] - est.y) < 30.0):
+        if self._explore_due(now, 40):
+            if self.target is not None and self.state == "explore":
+                self.diag["target_switches"] += 1
             self.target = self._choose_explore_target(now)
             self.goal_step = now
             self.path = []
