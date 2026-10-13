@@ -6,7 +6,8 @@ what was measured or read from the supplied simulator:
 * motion: the exact linear thrust/rotation model (``eod.params``), the
   simulator's thrust clipping, carrying with a third of the thrust gain and a
   speed cap, the reduced rotation response while carrying (0.39 of the
-  command, the median measured in the grasp probe), contact with walls and
+  command, the median measured in the grasp probe, optionally with the
+  per-step spread the probe measured), contact with walls and
   the disposal center that stops motion along the contact normal;
 * sensors: GPS and compass AR(1) noise (sigma 5 px / 4 deg, phi 0.98),
   odometer Gaussian noise (0.2 px, 8 deg, 1 deg), 181-ray lidar over walls,
@@ -83,8 +84,11 @@ class OfflineWorld:
                  brain_factory: Callable[[int], Any], *, seed: int = 0,
                  bombs: Sequence[Sequence[float]] = (), bombs_per_drone: int = 2,
                  max_steps: Optional[int] = None,
-                 gps_off: Optional[Callable[[int, int], bool]] = None) -> None:
+                 gps_off: Optional[Callable[[int, int], bool]] = None,
+                 carry_ratio_sigma: float = 0.0) -> None:
         self.rng = np.random.default_rng(seed)
+        # Per-step spread of the carried rotation ratio (0: the median only).
+        self.carry_ratio_sigma = float(carry_ratio_sigma)
         self.mode = mode
         self.fixture = fixture
         self.walls = fixture["walls"].astype(np.uint8)
@@ -256,7 +260,13 @@ class OfflineWorld:
         d.prev_x, d.prev_y, d.prev_heading = d.x, d.y, d.heading
         # Measured in the grasp probe: with a bomb on the pivot joint the drone
         # turns by only about 0.39 of the commanded rotation (median ratio).
-        rot_gain = P.ROT_GAIN * (CARRY_ROTATION_RATIO if d.carrying is not None else 1.0)
+        ratio = 1.0
+        if d.carrying is not None:
+            ratio = CARRY_ROTATION_RATIO
+            if self.carry_ratio_sigma > 0.0:
+                ratio = float(np.clip(self.rng.normal(CARRY_ROTATION_RATIO,
+                                                      self.carry_ratio_sigma), -0.2, 1.0))
+        rot_gain = P.ROT_GAIN * ratio
         d.heading = math.atan2(math.sin(d.heading + rot_gain * r),
                                math.cos(d.heading + rot_gain * r))
         if self._clear(nx, ny) < DRONE_BODY:
