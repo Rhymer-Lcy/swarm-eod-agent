@@ -1,0 +1,25 @@
+{
+ "agents": {
+  "place": "R0.1",
+  "rescue": "B0.1"
+ },
+ "files_sha256": {
+  "__init__.py": "0656e0113e927f3a028def02d7ec44d1b2ad76754255076636217294584add7a",
+  "base.py": "1b2de6f5a82f5651d5168b5922a76f5e5a5b465b89d94e300efdff8848190f76",
+  "blue.py": "f76dc39fb6c755a394fc1085764f51dcab95e30a8e4833639d504b591232eaa6",
+  "comms.py": "ea743b21fd8a57f03f16c88da41443194cf23c2f02bffb7ecf9c5144b0b64344",
+  "estimator.py": "ca59c5d1752629b3d7e6acd59c6d7b318af68ad39c3804cfc603342febd239a4",
+  "geometry.py": "674baf0abd9c5de1fc17c84d7c71d86acfb6e9da3aaaf10d6cbad95d5fc5682c",
+  "grid.py": "60053458bd4973358365b6b992ce387237cefe024d1b7ed79db0afd5538da7ff",
+  "motion.py": "d64537a299aee11cd8a9c989db8ea82fb8a6cd81a59f6e65603b99d31c6dc7ba",
+  "observation.py": "142415ba54f2009d6f579f490c416a93d965e0ed16ec0feacab317dcc37a4a3a",
+  "params.py": "3388b0218e8e675232ccd98a3646e5006185f5934edf9d417e264d9193ff6ce5",
+  "perception.py": "a2f2f0048c0422d70efb7936aa5617d1a68922590f5ca30ba479eb5b46e3a894",
+  "red.py": "ea517d265cb1e1de5fa64bd9416e0df72d420d8837d9ecc1108fa75c7687b957",
+  "shell.py": "dc4c21e61964440bb560bf4135c1e5bf7ef64461b2a432f743ba2f9605aec804",
+  "wallmap.py": "520f0b4c74e38a4e16942d661308b196f9fbc3f599ea4839cdcfad511cf85e40"
+ },
+ "name": "p1_ddc6897",
+ "source_commit": "ddc6897405b7a3662608c09ed5c640a3a045a0f0",
+ "source_dir": "src/swarm_rescue/solutions/eod"
+}
