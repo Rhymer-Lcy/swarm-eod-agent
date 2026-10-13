@@ -68,7 +68,12 @@ def markdown(rows: List[Dict[str, Any]]) -> str:
     for r in rows:
         comp = r.get("components") or {}
         comp_txt = ", ".join(f"{k} {v:.1f}" for k, v in comp.items() if v is not None)
-        agent = "official" if r["agent"] == "official" else r["agent"].split(":")[-1]
+        agent = r["agent"]
+        if agent.startswith("devtools.comparators."):
+            # Comparator packages share class names; the package names the arm.
+            agent = f"{agent.split('.')[2]} (comparator)"
+        elif agent != "official":
+            agent = agent.split(":")[-1]
         bombs = r.get("bombs")
         if r["mode"] == "rescue" and bombs:
             bombs_txt = f"{bombs[0]}/{bombs[1]} disposed"
