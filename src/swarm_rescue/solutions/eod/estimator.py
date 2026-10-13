@@ -29,9 +29,8 @@ previous estimator exactly: the model adds no variance, so the gain is the
 running average ``1 / n``, and an unloaded step that the odometer shows to
 violate the model (contact) keeps the Phase 1 treatment (measured rotation,
 gain at least 0.03 for ten steps). While carrying the gain settles near
-0.2, which the AR(1)
-compass error analysis in docs/AGENT_DESIGN.md (section 3) shows to be close
-to the minimum heading error achievable with these two sensors.
+0.2, inside the flat optimum of a complementary filter for an AR(1) compass
+error and a 1-degree odometer random walk (docs/AGENT_DESIGN.md, section 3).
 
 Commands are consumed: ``set_command`` records the command that the next
 physics step applies and the next ``update`` uses it once. If no command was
