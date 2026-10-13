@@ -174,3 +174,24 @@ library, one GPU through EGL).
   is disabled for blue (flags off) apart from diagnostic counters, and an
   offline run reproduced B1's result exactly (same completion step, score,
   health loss and heading errors).
+
+### Addendum 2 (2026-10-13, after 27 of 30 rounds; written before round 28)
+
+* **R1 decision (rounds 14-21).** Mean map score over the four red pairs
+  92.22 for R1 against 88.51 for R0.1 (per-pair values in EXPERIMENTS.md);
+  R1 submitted in every round and placed all bombs in every round, as did
+  R0.1. **R1 is adopted.**
+* **Red parity (round 22)** reproduced the instrumented R-1 round exactly.
+* **Held-out failure H-1.** B1 on Map03 (never used for blue before) disposed
+  7 of 10 bombs by the 5000-step limit, with mean drone health 41.2. Offline,
+  after that round, Map03 fails for B0.1 as well (9 of 10) and B1 (9 and
+  7 of 10); every bomb was grasped, and the failures were delivery retries,
+  stuck events and drones still carrying at the limit.
+* **Reserve round 1 (diagnostic repetition).** Reason: confirm the delivery
+  failure mechanism of H-1 in the real simulator. Configuration: exactly H-1
+  (B1, Map03 S1, seed 53) but instrumented, so that carry episodes, the
+  estimate and the drones' positions relative to the disposal center are
+  logged. No code change; the result is not used to tune Map03.
+* **Round 28 is X-1** as planned (B1 on the layout R1 placed in R-1, saved
+  as `r1_Map01_seed41.json`, SHA-256 prefix `e56d3f62d66d`). The second
+  reserve round is not planned.
