@@ -171,7 +171,7 @@ def test_runner_native_mode_validation_and_labels():
     args = runner.build_parser().parse_args(
         ["--label", "x", "--map", "Map01", "--mode", "rescue", "--seed", "1", "--native"])
     assert runner.run_mode(args) == "native"
-    assert args.phase == "phase2" and args.budget == 30
+    assert args.phase == "phase3" and args.budget == 30
     assert runner.main(["--label", "x", "--map", "Map01", "--mode", "rescue", "--seed", "1",
                         "--native", "--agent", "devtools.comparators.p1_ddc6897.shell:X",
                         "--bombs-file", "b.json"]) == 2
@@ -191,13 +191,15 @@ def test_runner_budget_refuses_when_phase_is_used(tmp_path):
     ledger = tmp_path / "ledger.jsonl"
     with ledger.open("w", encoding="utf-8") as f:
         for i in range(30):
-            f.write(json.dumps({"event": "started", "phase": "phase2"}) + "\n")
+            f.write(json.dumps({"event": "started", "phase": "phase3"}) + "\n")
+        # Earlier phases' rounds never count against the default (phase3) budget.
+        f.write(json.dumps({"event": "started", "phase": "phase2"}) + "\n")
         f.write(json.dumps({"event": "started", "phase": "phase1"}) + "\n")
-    assert runner.ledger_rounds(ledger, "phase2") == 30
+    assert runner.ledger_rounds(ledger, "phase3") == 30
     rc = runner.main(["--label", "x", "--map", "Map01", "--mode", "place", "--seed", "1",
                       "--runs-root", str(tmp_path)])
     assert rc == 3
-    assert runner.ledger_rounds(ledger, "phase2") == 30   # nothing was started
+    assert runner.ledger_rounds(ledger, "phase3") == 30   # nothing was started
 
 
 def test_occupancy_cpu_only_flags():

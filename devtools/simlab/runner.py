@@ -353,10 +353,10 @@ class _Tee(io.TextIOBase):
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--label", required=True, help="short run label (no spaces)")
-    p.add_argument("--phase", default="phase2", help="budget bucket")
+    p.add_argument("--phase", default="phase3", help="budget bucket")
     p.add_argument("--budget", type=int, default=30,
                    help="maximum rounds started in this phase (default 30, the "
-                        "Phase 2 authorization)")
+                        "Phase 3 authorization)")
     p.add_argument("--map", required=True, choices=[f"Map0{i}" for i in range(1, 6)])
     p.add_argument("--mode", required=True, choices=["rescue", "place"])
     p.add_argument("--drones", type=int, default=10)
