@@ -1,4 +1,4 @@
-# Experiments: methodology, benchmarks and results (Phases 1 and 2)
+# Experiments: methodology, benchmarks and results (Phases 1 to 3)
 
 Dates are business dates in UTC+8. All rounds ran on the remote server
 under the rules in [ENVIRONMENT.md](ENVIRONMENT.md), one process at a time,
@@ -428,3 +428,254 @@ status, nothing overwritten).
 The offline simulator does not reproduce the real Map01 red coverage failure
 (offline map scores near 92 for both R0.1 and R1), so offline red results bound
 regressions but cannot show the benefit.
+
+## 8. Phase 3 (2026-10-14): delivery to walled disposal centers, red placement
+
+The plan, its arms, scenarios, seeds, metrics and decision rules were frozen
+in [PHASE3_PLAN.md](PHASE3_PLAN.md) before the first Phase 3 round; three
+dated addenda record the blue decision, the freezing of R2 before any red
+round, and the red decision. Phase 3 had its own budget of 30 rounds; **28
+were started, none interrupted, all from clean commits; both reserve rounds
+were left unused.** Earlier phases' rounds are unchanged and not counted.
+
+Code of the rounds: rounds 1-21 at `bb569c3` (B2 agent code identical to
+`9f0cd91`), rounds 22-28 at `5e0803d` (R2 agent code identical to
+`e00c54e`; the blue files are byte-identical to `bb569c3`). B1 and R1 rows
+ran the frozen comparator package `devtools/comparators/p2_540054b`
+(byte-identical to `540054b`). Its first round (M-1, B1) reproduced the
+Phase 2 H-1 and reserve rounds exactly (7 of 10 bombs, score 58.48, health
+82.4), which checks the comparator end to end.
+
+### 8.1 Run ledger (Phase 3)
+
+Generated with `python -m devtools.simlab.summarize <ledger> --phase phase3`;
+comparator rows name their package. "official" is the submission entry point
+at the round's commit (B2 for rescue, R2 for place in rounds 22-28).
+
+| # | label | map | mode | agent | run mode | seed | steps | wall s | steps/s | score | components | bombs | termination |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | p3-M1-b1-map03-s1-seed53 | Map03 | rescue | p2_540054b (comparator) | instrumented | 53 | 5000 | 73.07 | 68.4 | 58.48 | disposal 70.0, health 82.4, time 0.0 | 7/10 disposed | step_limit |
+| 2 | p3-M1-b2-map03-s1-seed53 | Map03 | rescue | official | instrumented | 53 | 791 | 10.96 | 72.2 | 99.44 | disposal 100.0, health 97.2, time 100.0 | 10/10 disposed | all_disposed |
+| 3 | p3-M2-b1-map03-s2-seed61 | Map03 | rescue | p2_540054b (comparator) | instrumented | 61 | 5000 | 73.36 | 68.2 | 53.24 | disposal 60.0, health 86.2, time 0.0 | 6/10 disposed | step_limit |
+| 4 | p3-M2-b2-map03-s2-seed61 | Map03 | rescue | official | instrumented | 61 | 1223 | 16.51 | 74.1 | 99.16 | disposal 100.0, health 95.8, time 100.0 | 10/10 disposed | all_disposed |
+| 5 | p3-M3-b1-map03-s3-seed62 | Map03 | rescue | p2_540054b (comparator) | instrumented | 62 | 5000 | 74.43 | 67.2 | 63.88 | disposal 80.0, health 79.4, time 0.0 | 8/10 disposed | step_limit |
+| 6 | p3-M3-b2-map03-s3-seed62 | Map03 | rescue | official | instrumented | 62 | 716 | 10.08 | 71.1 | 99.28 | disposal 100.0, health 96.4, time 100.0 | 10/10 disposed | all_disposed |
+| 7 | p3-M4-b1-map03-s4-seed63 | Map03 | rescue | p2_540054b (comparator) | instrumented | 63 | 5000 | 73.06 | 68.4 | 65.44 | disposal 80.0, health 87.2, time 0.0 | 8/10 disposed | step_limit |
+| 8 | p3-M4-b2-map03-s4-seed63 | Map03 | rescue | official | instrumented | 63 | 915 | 12.75 | 71.8 | 99.76 | disposal 100.0, health 98.8, time 100.0 | 10/10 disposed | all_disposed |
+| 9 | p3-M5-b1-map03-far-s5-seed64 | Map03 | rescue | p2_540054b (comparator) | instrumented | 64 | 5000 | 76.9 | 65.0 | 69.20 | disposal 90.0, health 76.0, time 0.0 | 9/10 disposed | step_limit |
+| 10 | p3-M5-b2-map03-far-s5-seed64 | Map03 | rescue | official | instrumented | 64 | 673 | 9.26 | 72.7 | 99.56 | disposal 100.0, health 97.8, time 100.0 | 10/10 disposed | all_disposed |
+| 11 | p3-G1-b1-map01-s1-seed71 | Map01 | rescue | p2_540054b (comparator) | instrumented | 71 | 1667 | 23.14 | 72.0 | 85.26 | disposal 100.0, health 93.0, time 33.3 | 10/10 disposed | all_disposed |
+| 12 | p3-G1-b2-map01-s1-seed71 | Map01 | rescue | official | instrumented | 71 | 1430 | 19.69 | 72.6 | 91.00 | disposal 100.0, health 98.0, time 57.0 | 10/10 disposed | all_disposed |
+| 13 | p3-G2-b1-map02-s2-seed72 | Map02 | rescue | p2_540054b (comparator) | instrumented | 72 | 758 | 10.68 | 71.0 | 99.68 | disposal 100.0, health 98.4, time 100.0 | 10/10 disposed | all_disposed |
+| 14 | p3-G2-b2-map02-s2-seed72 | Map02 | rescue | official | instrumented | 72 | 699 | 9.98 | 70.1 | 99.88 | disposal 100.0, health 99.4, time 100.0 | 10/10 disposed | all_disposed |
+| 15 | p3-G3-b1-map04-s2-seed73 | Map04 | rescue | p2_540054b (comparator) | instrumented | 73 | 797 | 13.18 | 60.5 | 99.88 | disposal 100.0, health 99.4, time 100.0 | 10/10 disposed | all_disposed |
+| 16 | p3-G3-b2-map04-s2-seed73 | Map04 | rescue | official | instrumented | 73 | 820 | 13.77 | 59.6 | 99.76 | disposal 100.0, health 98.8, time 100.0 | 10/10 disposed | all_disposed |
+| 17 | p3-G4-b1-map05-s2-seed74 | Map05 | rescue | p2_540054b (comparator) | instrumented | 74 | 646 | 9.94 | 65.0 | 99.64 | disposal 100.0, health 98.2, time 100.0 | 10/10 disposed | all_disposed |
+| 18 | p3-G4-b2-map05-s2-seed74 | Map05 | rescue | official | instrumented | 74 | 731 | 10.81 | 67.6 | 99.56 | disposal 100.0, health 97.8, time 100.0 | 10/10 disposed | all_disposed |
+| 19 | p3-N1-b2-native-map03-s1-seed53 | Map03 | rescue | official | native | 53 | 791 | 11.0 | 71.9 | 99.44 | disposal 100.0, health 97.2, time 100.0 | 10/10 disposed | all_disposed |
+| 20 | p3-N2-b2-native-map01-far-s3-seed75 | Map01 | rescue | official | native | 75 | 1711 | 23.64 | 72.4 | 84.42 | disposal 100.0, health 93.2, time 28.9 | 10/10 disposed | all_disposed |
+| 21 | p3-N3-b2-native-map01-r01layout-seed76 | Map01 | rescue | official | native | 76 | 1336 | 18.6 | 71.8 | 92.24 | disposal 100.0, health 94.8, time 66.4 | 10/10 disposed | all_disposed |
+| 22 | p3-R1-r1-map04-seed81 | Map04 | place | p2_540054b (comparator) | instrumented | 81 | 2350 | 34.72 | 67.7 | 64.12 | map 94.9, time 100.0, wall 33.3 | 10 placed | map_submitted |
+| 23 | p3-R1-r2-map04-seed81 | Map04 | place | official | instrumented | 81 | 2350 | 34.56 | 68.0 | 71.05 | map 95.9, time 100.0, wall 65.4 | 10 placed | map_submitted |
+| 24 | p3-R2-r1-map01-seed82 | Map01 | place | p2_540054b (comparator) | instrumented | 82 | 940 | 9.46 | 99.3 | 67.88 | map 91.5, time 100.0, wall 60.8 | 10 placed | map_submitted |
+| 25 | p3-R2-r2-map01-seed82 | Map01 | place | official | instrumented | 82 | 940 | 9.5 | 98.9 | 72.06 | map 91.1, time 100.0, wall 82.6 | 10 placed | map_submitted |
+| 26 | p3-R3-r1-map05-seed83 | Map05 | place | p2_540054b (comparator) | instrumented | 83 | 3384 | 46.3 | 73.1 | 73.41 | map 98.9, time 100.0, wall 69.8 | 10 placed | map_submitted |
+| 27 | p3-R3-r2-map05-seed83 | Map05 | place | official | instrumented | 83 | 3384 | 46.57 | 72.7 | 77.40 | map 99.4, time 100.0, wall 88.4 | 10 placed | map_submitted |
+| 28 | p3-N4-r2-native-map04-seed84 | Map04 | place | official | native | 84 | 2350 | 33.92 | 69.3 | 71.11 | map 96.2, time 100.0, wall 65.0 | 10 placed | map_submitted |
+
+### 8.2 Map03 delivery failure: mechanism
+
+The truth log of the Phase 2 reserve round (instrumented repetition of H-1)
+was re-read with the agents' own targets (`carry_episodes.py` and an ad hoc
+per-drone trace). On Map03 the disposal center (x -125.5 to 85.5, y -102.5 to
+8.5) has a 6 px wall centered 4.5 px below its south face (y -107, x -130 to
+198) and another 4.5 px west of its west face (x -130), so the gaps are
+about 1.5 px.
+
+* The three stuck carriers spent 4127-4402 carrying steps in the carry
+  state, steering towards field goals at (103.5, -133) and (103.5, -125)
+  (two drones, south of the wall) and (-144.5, 3) (one drone, west of the
+  wall), with occasional terminal pushes at center points within 50 px.
+* B1 builds its goals 32 px outward from sampled center surface points,
+  along the direction from the center's middle. Near a corner of a flat
+  center that direction points diagonally, and the goal lands behind the
+  wall. The planner then sets the goal cell traversable even when it is an
+  obstacle, so a goal in or next to a wall connects both sides of it; the
+  carriers reached their goals and stayed there.
+* The terminal push skipped the line-of-sight test within 50 px and timeouts
+  re-aimed at other points on the same side.
+* The heading estimate was not involved (carrying error p95 8-9 degrees).
+
+Two facts of the supplied simulator make a better goal possible: the semantic
+sensor drops wall hits only after ray casting, so walls stop its rays and
+every detection of the center is in line of sight; and every drone sees the
+center from the start area on the supplied maps.
+
+### 8.3 Development evidence before the rounds (offline approximation)
+
+Offline attempts ran in a scratch worktree of the server clone through
+`devtools/simlab/delivery_batch.sh`, `offline_batch.sh` or one-line batch
+loops under `remote_cpu.sh` (one attempt directory per batch, per-job exit
+status, nothing overwritten). They are development signals, not simulator
+rounds.
+
+| Attempt | Content | Status and result |
+|---|---|---|
+| P3-A001 | B1 on the synthetic `corner` and `open` fixtures, first fixture version (6 px gaps) | corner 1, 2, 4 of 6 bombs at 3000 steps; open 6 of 6 at step 304 |
+| P3-A002 | B2 on the same | corner 6 of 6 at steps 793-904; open at step 281 |
+| P3-A003 | final fixture (2 px gaps, as on Map03), B1 and B2, corner seeds 1-3, open seeds 1-2 | B1 corner 1, 2, 1 of 6 at 3000; B2 6 of 6 at 769-853; open B1 304, 207 and B2 281, 294 |
+| P3-A004 | teleported carrier behind a wall, 4 positions x seeds 3-7 | B1 0 of 20 delivered within 1200 steps; B2 20 of 20 in 173-297 steps |
+| P3-A005, A006 | B1, B2 on the real-map fixtures (layouts s1; Map01 and Map03 seeds 1-2) | Map03: B1 9 and 7 of 10 at 5000, B2 10 of 10 at steps 627 and 677; elsewhere 10 of 10 for both (B1 736-1494, B2 674-1402 steps) |
+| P3-A007 | profiles of B1 and B2 (Map01, Map03, Map04) | section 8.7 |
+| P3-A008 | red wall-coverage diagnosis, R1, Map01-Map05 | section 8.6 |
+| P3-A009 | red diagnosis rerun | **deferred** by the occupancy gate (node 0 busy); the scratch worktree had also not been updated; nothing ran |
+| P3-A010 | R1 against R2 coordination only, six configurations | section 8.6 |
+| P3-A011 | R2 with the first solid-interior version, five maps, two R1 references | section 8.6 |
+| P3-A012 | rerun with solid-inference measurement | **failed**: the scratch worktree had been reset without its overlay; all six jobs exited 1 (module missing); nothing used |
+| P3-A013 | P3-A012 rerun, including two repetitions of two configurations | repetitions identical; solid precision, section 8.6 |
+| P3-A014 | final R2, eight configurations | section 8.6 |
+
+Regression tests: `devtools/tests/test_blue_delivery.py` (20 tests; the
+closed-loop cases run the frozen B1 on the same inputs and require it to
+fail) and `devtools/tests/test_red_r2.py` (10 tests). Each mechanism was
+mutation-checked by planting the old behaviour back: B1's 50 px push without
+check, B1's unchecked outward goals, no progress watch, idle drones at the
+start area; for red, ignoring relayed claims, no target re-validation, no
+solid interiors, interiors next to free space counted as enclosed, and no
+disposal-center exclusion. Each planted mutation made at least one test
+fail; the first version of the idle test called the helper directly and did
+not catch its mutation, and was rewritten to go through the waiting
+behaviour.
+
+### 8.4 Blue: B1 against B2 (nine pairs, instrumented)
+
+Delivery failures are carry episodes that ended in a drop or were still held
+at the end; in a round that ended because the last bomb was disposed, the
+truth log stops before that release, and that episode counts as a disposal
+(PHASE3_PLAN.md, addendum 1). Retries: B1 `deliver_retries`, B2
+`approach_failures`, summed over the drones.
+
+| Pair | Scenario (seed) | B1 disposed, step, score | B2 disposed, step, score | Delivery failures, B1 ; B2 | Health, B1 ; B2 | Retries, B1 ; B2 |
+|---|---|---|---|---|---|---|
+| M-1 | Map03 s1 (53) | 7/10, 5000, 58.48 | 10/10, 791, 99.44 | 3 ; 0 | 82.4 ; 97.2 | 86 ; 0 |
+| M-2 | Map03 s2 (61) | 6/10, 5000, 53.24 | 10/10, 1223, 99.16 | 4 ; 0 | 86.2 ; 95.8 | 97 ; 0 |
+| M-3 | Map03 s3 (62) | 8/10, 5000, 63.88 | 10/10, 716, 99.28 | 2 ; 0 | 79.4 ; 96.4 | 69 ; 0 |
+| M-4 | Map03 s4 (63) | 8/10, 5000, 65.44 | 10/10, 915, 99.76 | 2 ; 0 | 87.2 ; 98.8 | 71 ; 0 |
+| M-5 | Map03 far s5 (64) | 9/10, 5000, 69.20 | 10/10, 673, 99.56 | 1 ; 0 | 76.0 ; 97.8 | 37 ; 0 |
+| G-1 | Map01 s1 (71) | 10/10, 1667, 85.26 | 10/10, 1430, 91.00 | 0 ; 0 | 93.0 ; 98.0 | 0 ; 0 |
+| G-2 | Map02 s2 (72) | 10/10, 758, 99.68 | 10/10, 699, 99.88 | 0 ; 0 | 98.4 ; 99.4 | 0 ; 0 |
+| G-3 | Map04 s2 (73) | 10/10, 797, 99.88 | 10/10, 820, 99.76 | 0 ; 0 | 99.4 ; 98.8 | 0 ; 0 |
+| G-4 | Map05 s2 (74) | 10/10, 646, 99.64 | 10/10, 731, 99.56 | 0 ; 0 | 98.2 ; 97.8 | 0 ; 0 |
+
+* Block M (the Map03 failure family): 38 of 50 bombs (B1) against 50 of 50
+  (B2); B2 more in all five pairs (sign test p = 0.0625); mean score 62.05
+  against 99.44; full completion 0 of 5 against 5 of 5. Stuck events in
+  block M: 211-305 per round for B1, 8-16 for B2.
+* Block G (development and alternative layouts): equal disposals in all
+  four pairs; mean score 96.12 against 97.55; B2 finished earlier in two
+  pairs and later in two (by 23 and 85 steps; sign test on the score p = 1).
+* No round crashed, reached the wall-clock limit, reported a brain error or
+  lost a drone. The B2 progress watch never fired in these rounds
+  (`approach_failures` 0); in G-4 the radial fallback goals were computed 6
+  times, when a drone had no supported witnessed stand-off.
+* Decision under the plan's rules: **B2 adopted** (addendum 1).
+
+### 8.5 Native competition-mode confirmation (blue)
+
+| Round | Configuration | Outcome |
+|---|---|---|
+| N-1 | Map03 s1, seed 53 (M-1) | identical to the instrumented B2 arm: all bombs at step 791, 99.44, health 97.2; 71.9 against 72.2 steps/s |
+| N-2 | Map01 far s3, seed 75 (held out) | 10/10 at step 1711, 84.42 |
+| N-3 | Map01, layout placed by R0.1 in Phase 1, seed 76 | 10/10 at step 1336, 92.24 |
+
+### 8.6 Red: wall-coverage diagnosis and R1 against R2
+
+**Diagnosis** (`devtools/simlab/red_wall_diagnosis.py`, offline). For each
+run it scores, with the official `compute_wall_score` against the walls-only
+truth, the bombs actually placed and three greedy references: on the team's
+merged wall map at the start of the placement window (what the agents knew),
+on the map at submission, and on the truth walls. R1 lost wall score in two
+places:
+
+| Map (seed) | R1 actual | Greedy, team map at placement | Greedy, truth | Recall of weighted truth walls at placement | Blast redundancy | Pairs closer than one radius |
+|---|---|---|---|---|---|---|
+| Map01 (1) | 76.89 | 95.87 | 100.00 | 0.934 | 1.327 | 5 |
+| Map02 (1) | 75.53 | 95.04 | 99.86 | 0.931 | 1.349 | 3 |
+| Map03 (1) | 73.72 | 97.41 | 100.00 | 0.982 | 1.352 | 4 |
+| Map04 (1) | 34.77 | 47.41 | 97.65 | 0.602 | 1.292 | 2 |
+| Map04 (2) | 36.56 | 46.80 | 97.65 | 0.605 | 1.306 | 2 |
+| Map05 (1) | 56.48 | 89.53 | 98.50 | 0.957 | 1.430 | 6 |
+
+(P3-A008.) The placement procedure lost 10-33 points against a greedy
+placement on the agents' own knowledge, with overlapping blasts; in the six
+R1 runs of P3-A010, 21 of 21 placements within one blast radius of an
+earlier bomb were made by a drone that already knew that bomb, through a
+target kept after the bomb was gossiped or, in 6 of the 21, an emergency
+drop near the rally point. On Map04 the team map itself held only about 60 % of the
+weighted truth walls although the submitted map scored about 95: the four
+solid boxes of Map04 hold about 74,000 of its 148,805 interior wall pixels,
+and the lidar maps only their outlines.
+
+**R2** (PHASE3_PLAN.md, addendum 2) changes the placement only: targets are
+given up when a known bomb lies within 0.8 blast radii, claims are relayed,
+and enclosed unknown regions of a drone's occupancy grid (not the disposal
+center) weigh as solid wall. Offline wall scores, single runs:
+
+| Map (seed) | R1 | R2 coordination only (P3-A010) | R2 final (P3-A014) | Solid inference at placement: area px, precision |
+|---|---|---|---|---|
+| Map01 (1) | 76.89 | 85.25 | 85.25 | 384, 0.33 |
+| Map01 (2) | 62.23 | 83.14 | 83.14 | 256, 0.00 |
+| Map02 (1) | 76.26 | | 94.36 | 3136, 0.79 |
+| Map03 (1) | 73.72 | 95.58 | 95.58 | 640, 0.41 |
+| Map04 (1) | 34.77 | 39.63 | 60.85 | 36480, 0.98 |
+| Map04 (2) | 36.56 | | 67.10 | 34176, 0.95 |
+| Map05 (1) | 54.74 | 80.03 | 93.81 | 6656, 0.83 |
+| Map05 (2) | 80.88 | 79.25 | 77.57 | 6336, 0.81 |
+
+R1 values from P3-A010 and P3-A011 (comparator package). The first solid
+version (P3-A011, without the disposal-center exclusion) took the center's
+interior as solid on Map03 and Map05 (precision 0.05 and 0.18) and lowered
+those two maps by about 5 points against the coordination-only version; a
+picture of the inferred cells against the truth showed the disposal center,
+and the exclusion was added. Identical code produced identical results in
+two repetitions (P3-A013), but R1 on Map05 seed 1 gave 56.48 in P3-A008 and
+54.74 in P3-A010 (cause not found), so differences of a few points between
+single offline runs are not interpreted.
+
+**Real-simulator pairs** (instrumented; partial score = map 50 %, wall 20 %,
+time 10 %, maximum 80):
+
+| Pair | Scenario (seed) | R1 map, wall, partial | R2 map, wall, partial | R2 targets given up |
+|---|---|---|---|---|
+| R-1 | Map04 (81) | 94.92, 33.28, 64.12 | 95.93, 65.42, 71.05 | 2 |
+| R-2 | Map01 (82) | 91.45, 60.76, 67.88 | 91.10, 82.58, 72.06 | 1 |
+| R-3 | Map05 (83) | 98.91, 69.78, 73.41 | 99.42, 88.44, 77.40 | 5 |
+
+* Mean wall score 54.61 (R1) against 78.81 (R2), higher in 3 of 3 pairs
+  (p = 0.25); mean map score 95.10 against 95.48; mean partial score 68.47
+  against 73.50. Every round of both arms submitted at the same step and
+  placed all 10 bombs; no brain errors. R2 is adopted (addendum 3).
+* N-4 (native, R2, Map04 seed 84): map 96.23, wall 64.96, partial 71.11.
+  For orientation only (different seed, not paired): the Phase 2 native R1
+  round on Map04 (seed 51) scored wall 32.09.
+* These three maps were used offline to develop R2; the pairs are
+  development evidence, not a held-out test.
+
+### 8.7 Runtime
+
+* **Throughput** (instrumented, one simulation process, node 0 CPUs, two
+  threads per library, one GPU through EGL): B2 59.6-74.1 steps/s with 10
+  drones (median over the nine pairs 71.8), B1 60.5-72.0 (median 68.2) in
+  the same configurations; the lowest values on Map04. Native blue rounds
+  71.8-72.4. Red: R2 68.0-98.9 steps/s with 5 drones, R1 67.7-99.3.
+* **Controller** (mean per drone-step, instrumented): B2 0.82-1.14 ms, B1
+  0.85-1.12 ms; R2 1.43-2.18 ms, R1 1.43-2.17 ms. **Worst case** (maximum
+  `control()` time per round): B2 28.96-33.16 ms, B1 26.61-30.89 ms; R2
+  41.13-77.82 ms, R1 39.85-76.91 ms. The extra 2-3 ms of B2's maximum was not
+  profiled.
+* **Profile** (P3-A007, offline, B2): no function of `delivery.py` is among
+  the 35 most expensive entries by cumulative time (the last of them took
+  0.20-0.32 s of 7.4-14.8 s of brain time); the geodesic field remains the
+  largest single cost, as in B1.
+  Nothing was optimized for B2, and no collision check was removed.
+* Nothing here measures the organizer's evaluator.
