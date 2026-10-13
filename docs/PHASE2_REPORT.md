@@ -107,7 +107,7 @@ observed span + the shared compute changes. Four pairs (instrumented):
 |---|---|---|
 | Mean map score | 88.51 | 92.22 |
 | Lowest map score | 75.77 | 86.78 |
-| Mean partial score (of 80) | 67.14 | 70.12 |
+| Mean partial score (of 80) | 67.13 | 70.12 |
 | Submissions; placement completion | 4 of 4; 1.0 | 4 of 4; 1.0 |
 
 R1 mapped more in three pairs (most on the weakest seed) and 0.24 points less
