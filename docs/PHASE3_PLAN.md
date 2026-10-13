@@ -177,3 +177,47 @@ steps per second.
   episode is counted as a disposal (each of these rounds records 10 of 10
   disposed). Delivery failures are therefore 12 for B1 (all in block M,
   equal to its undisposed bombs) and 0 for B2.
+
+### Addendum 2 (2026-10-14, after 21 of 30 rounds; before any red round)
+
+* **R2 frozen** at the commit that adds this addendum (agent code identical
+  to `e00c54e`; relative to `bb569c3`, where the blue rounds ran, only
+  `red.py` changed, so B2's behaviour is unchanged). R2 = R1 plus two
+  placement changes, each with a mechanism found by the offline diagnosis
+  `devtools/simlab/red_wall_diagnosis.py`:
+  1. *Coordination.* In R1, every placement within one blast radius of an
+     earlier one was made by a drone that already knew the earlier bomb (21
+     of 21 such placements in the six R1 diagnosis runs of attempt P3-A010):
+     a chosen target was kept for up to 240 steps after a bomb next to it
+     had been gossiped, and claims were heard only within radio range of
+     their owner. R2 gives up a target as soon as a known placed bomb lies
+     within 0.8 blast radii of it, and relays claims with the step at which
+     their owner made them (valid for 80 steps).
+  2. *Solid obstacle interiors.* The wall score counts the whole area of a
+     solid box, while the lidar maps only its outline (the four boxes of
+     Map04 hold about 74,000 of its 148,805 interior wall pixels). R2, when
+     choosing a placement, weighs as solid wall the unknown regions of the
+     drone's own occupancy grid that are enclosed by occupied cells (not
+     4-adjacent to free cells, not on the grid edge, at most 70,000 px^2,
+     not overlapping the observed disposal center). The submitted map is
+     unchanged. A first version without the disposal-center exclusion took
+     the center's interior as solid on Map03 and Map05 (precision 0.05 and
+     0.18 against the truth walls); with it, precision is 0.95-0.98 on
+     Map04, 0.81-0.83 on Map05 and 0.79 on Map02.
+* **Development evidence (offline approximation, not simulator rounds).**
+  Wall score of single offline runs, R1 against final R2: Map01 seeds 1
+  and 2 76.89 / 62.23 against 85.25 / 83.14; Map02 76.26 against 94.36;
+  Map03 73.72 against 95.58; Map04 seeds 1 and 2 34.77 / 36.56 against
+  60.85 / 67.10; Map05 seeds 1 and 2 54.74 / 80.88 against 93.81 / 77.57.
+  Map scores of the submitted maps differed by at most 1.3 points. Offline
+  results of identical R1 code differed once between two processes (Map05
+  seed 1: 56.48 in P3-A008, 54.74 in P3-A010; cause not found), so single
+  offline differences of a few points are not interpreted. Attempts P3-A009
+  and P3-A012 ran nothing usable (a deferred gate, and a scratch worktree
+  reset without its overlay) and are recorded as failed.
+* **Partition.** Map01, Map04 and Map05 were used offline to develop R2, so
+  the red block (Map04 seed 81, Map01 seed 82, Map05 seed 83) is
+  development evidence for red, not a held-out test. Its R1 arm is
+  `devtools.comparators.p2_540054b.shell:EodPlaceDrone`; both arms place
+  10 bombs with 5 drones. N-4 (native, Map04 seed 84) runs only if R2 is
+  adopted under section 7.
