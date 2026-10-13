@@ -46,6 +46,13 @@ mode, and on a test package built like `create_zip_submission.sh` (21 entries,
 the repository. A passing static check does not show that online evaluation
 will succeed.
 
+Phase 2 (2026-10-13, at `c95eee0`, on the remote server under the
+remote-first policy): the workspace check passed, and so did the package check
+on a validation-only `team000_preliminary.zip` (22 entries, 53,944 bytes,
+placeholder identity), which was built with Python's `zipfile` in the same
+layout as `create_zip_submission.sh` because the server has no `zip` program.
+It was kept in an ignored path and not submitted.
+
 ## Package layout
 
 ```
