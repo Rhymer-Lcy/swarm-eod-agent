@@ -1,9 +1,11 @@
 """Evaluation-only ground-truth logging for simulation rounds.
 
 ``with_truth_log(cls, sink)`` returns a subclass of an agent class whose only
-change is that ``define_message_for_all`` first copies ground truth (drone
+changes are that ``define_message_for_all`` first copies ground truth (drone
 pose, health, grasp state, bombs) into ``sink`` and then returns the agent's
-own message unchanged. The framework calls ``define_message_for_all`` once
+own message unchanged, and that ``control`` is timed (controller time per
+drone-step) and, for red, the submitting brain's merged wall evidence is
+copied once after submission for offline mapping ablations. The framework calls ``define_message_for_all`` once
 per step for every drone, before ``control()`` and outside the control-step
 ground-truth guard, so the recorded state is exactly the state the agent's
 next ``control()`` observes through its sensors.
@@ -17,6 +19,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -42,6 +45,38 @@ class TruthSink:
         self.submitted_step: Optional[int] = None
         self.brain_rows: List[tuple] = []
         self._state_codes: Dict[str, int] = {}
+        self.control_seconds: Dict[int, float] = {}
+        self.control_calls: Dict[int, int] = {}
+        self.control_max: Dict[int, float] = {}
+        self.submission: Optional[Dict[str, Any]] = None
+
+    def add_control_time(self, ident: int, seconds: float) -> None:
+        self.control_seconds[ident] = self.control_seconds.get(ident, 0.0) + seconds
+        self.control_calls[ident] = self.control_calls.get(ident, 0) + 1
+        self.control_max[ident] = max(self.control_max.get(ident, 0.0), seconds)
+
+    def capture_submission(self, drone: Any) -> None:
+        """Copy the submitting red brain's merged wall evidence (read-only).
+
+        Used offline for mapping ablations (for example border rendering on
+        or off) on the evidence of a real round; nothing flows back.
+        """
+        if self.submission is not None:
+            return
+        brain = getattr(drone, "_brain", None)
+        if brain is None or not getattr(brain, "submitted", False):
+            return
+        evidence = getattr(brain, "evidence", None)
+        snapshots = getattr(brain, "snapshots", None)
+        if evidence is None or snapshots is None:
+            return
+        from swarm_rescue.solutions.eod.wallmap import merge
+        self.submission = {
+            "drone": int(drone.identifier),
+            "evidence": merge(evidence, (v[1] for v in snapshots.values())),
+            "dc_box": brain.dc.bbox() if getattr(brain, "dc", None) is not None else None,
+            "submitted_map": getattr(brain, "final_map", None),
+        }
 
     def record(self, drone: Any) -> None:
         step = int(drone.elapsed_timestep) + 1
@@ -115,7 +150,27 @@ class TruthSink:
                                                       encoding="utf-8") as f:
             json.dump(self.agent_reports, f, indent=1, sort_keys=True,
                       default=_json_default)
-        return summarize_truth(drones, bombs)
+        summary = summarize_truth(drones, bombs)
+        calls = sum(self.control_calls.values())
+        if calls:
+            total = sum(self.control_seconds.values())
+            summary["controller"] = {
+                "calls": calls,
+                "total_s": round(total, 3),
+                "mean_ms_per_drone_step": round(1000.0 * total / calls, 4),
+                "max_ms": round(1000.0 * max(self.control_max.values()), 2),
+            }
+        if self.submission is not None:
+            sub = self.submission
+            np.savez_compressed(
+                directory / "submission_evidence.npz",
+                evidence=sub["evidence"].astype(np.float32),
+                dc_box=np.array(sub["dc_box"] if sub["dc_box"] is not None else [],
+                                dtype=np.float64),
+                submitted_map=(sub["submitted_map"] if sub["submitted_map"] is not None
+                               else np.zeros((0, 0), np.uint8)))
+            summary["submission_evidence_drone"] = sub["drone"]
+        return summary
 
 
 def _json_default(value: Any) -> Any:
@@ -192,6 +247,15 @@ def with_truth_log(base_cls: type, sink: TruthSink) -> type:
             message = super().define_message_for_all()
             sink.record(self)
             return message
+
+        def control(self):
+            # Controller time only (the agent's own control step); the
+            # simulator's time is the round's wall time minus the sum.
+            started = time.perf_counter()
+            command = super().control()
+            sink.add_control_time(int(self.identifier), time.perf_counter() - started)
+            sink.capture_submission(self)
+            return command
 
     TruthLogged.__name__ = f"TruthLogged{base_cls.__name__}"
     TruthLogged.__qualname__ = TruthLogged.__name__
