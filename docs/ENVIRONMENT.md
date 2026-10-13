@@ -189,9 +189,12 @@ The server is shared. These rules apply to every job:
     requires the pinned CPUs to be idle and on NUMA node 0 (it reads
     `/sys/devices/system/node/node0/cpulist`), then the command runs with
     `taskset`, one thread per library and a timeout; no GPU is required.
-    Batches of offline runs go through `devtools/simlab/offline_batch.sh`,
-    which records every job's exit status and never overwrites an earlier
-    attempt. The official `check_submission.sh` picks `python3` from `PATH`;
+    Since Phase 3 both `remote_cpu.sh` and `remote_run.sh` re-run themselves
+    under `taskset` first, so the gate and every helper process stay on the
+    permitted CPUs too; `INTERPRETER=bash` runs a batch script under the same
+    gate. Batches of offline runs go through `devtools/simlab/offline_batch.sh`
+    or `delivery_batch.sh`, which record every job's exit status and never
+    overwrite an earlier attempt. The official `check_submission.sh` picks `python3` from `PATH`;
     on the server it is run with the environment's `bin` first in `PATH` and
     `VIRTUAL_ENV` set, so that it uses the project interpreter (unmodified
     script). Uncommitted work is tested in a separate scratch worktree of the
