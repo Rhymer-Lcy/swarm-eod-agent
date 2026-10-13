@@ -37,6 +37,9 @@ def load(ledger: Path, phase: str) -> List[Dict[str, Any]]:
         row = {"run_id": run_id, "index": start.get("round_index_in_phase"),
                "label": start["label"], "map": start["map"], "mode": start["mode"],
                "agent": start["agent"], "seed": start["seed"],
+               # Ledgers before Phase 2 have no run_mode: derived from the truth log.
+               "run_mode": start.get("run_mode") or
+               ("instrumented" if start.get("truth_log") else "harness"),
                "competition": start["competition_mode"], "commit": start["git_head"][:7],
                "dirty": start["git_dirty"], "bombs_file": Path(start["bombs_file"]).name
                if start.get("bombs_file") else None}
@@ -58,8 +61,9 @@ def load(ledger: Path, phase: str) -> List[Dict[str, Any]]:
 
 
 def markdown(rows: List[Dict[str, Any]]) -> str:
-    head = ("| # | label | map | mode | agent | seed | steps | wall s | score | components | "
-            "bombs | termination |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+    head = ("| # | label | map | mode | agent | run mode | seed | steps | wall s | steps/s | "
+            "score | components | bombs | termination |\n"
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
     out = []
     for r in rows:
         comp = r.get("components") or {}
@@ -74,7 +78,8 @@ def markdown(rows: List[Dict[str, Any]]) -> str:
             bombs_txt = ""
         score = r.get("score")
         out.append(f"| {r['index']} | {r['label']} | {r['map']} | {r['mode']} | {agent} | "
-                   f"{r['seed']} | {r.get('steps', '')} | {r.get('walltime_s', '')} | "
+                   f"{r['run_mode']} | {r['seed']} | {r.get('steps', '')} | "
+                   f"{r.get('walltime_s', '')} | {r.get('steps_per_s', '')} | "
                    f"{'' if score is None else f'{score:.2f}'} | {comp_txt} | {bombs_txt} | "
                    f"{r.get('termination', r['status'])} |")
     return head + "\n".join(out) + "\n"
