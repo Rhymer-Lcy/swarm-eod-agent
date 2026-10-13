@@ -119,10 +119,16 @@ and two smoke runs show that the local pipeline functions; they do **not**
 establish behavioural equivalence with the evaluator's Mesa OpenGL stack,
 which has not been tested.
 
-EGL device index versus physical GPU: **unresolved and environment-dependent.**
-`PYGLET_HEADLESS_DEVICE` indexes the EGL device list, whose order is not
-guaranteed to match `nvidia-smi` or CUDA numbering; Phase 0 used index 7 but
-did not confirm which physical GPU served it.
+EGL device index versus physical GPU: **resolved for the project's server
+(2026-10-13), still host-dependent in general.** `PYGLET_HEADLESS_DEVICE`
+indexes the EGL device list, whose order is not guaranteed to match
+`nvidia-smi` or CUDA numbering. `devtools/egl_device_map.py` resolves every
+EGL device read-only (no context is created): EGL device, DRM node, PCI
+address, then the `nvidia-smi` index and UUID, cross-checked with
+`EGL_CUDA_DEVICE_NV`. On the project's server EGL index k is `nvidia-smi`
+index k and CUDA device k for all eight GPUs, and every GPU is attached to
+NUMA node 0. The GPU used in Phase 1 is recorded by UUID in the private
+operations notes. Re-run the mapping on any other host.
 
 ## Remote execution safety rules
 
@@ -160,6 +166,16 @@ The server is shared. These rules apply to every job:
    duration chosen.
 8. `/usr/bin/time` and `numactl` are not installed; time runs with bash's
    `SECONDS` or `time` keyword.
+9. Since Phase 1 the rules above are applied by
+   `devtools/simlab/remote_run.sh`: it runs the occupancy gate
+   (`devtools/simlab/occupancy.py`: every GPU without compute processes and
+   below 50 MiB and 5 % use, the pinned CPUs below 25 % busy) and defers with
+   exit status 75 otherwise, then runs the command with `taskset`, thread caps,
+   EGL headless on the chosen device, `PYTHONNOUSERSITE=1`,
+   `PYTHONDONTWRITEBYTECODE=1` and a hard `timeout`, and prints a report-only
+   occupancy snapshot afterwards. Simulation rounds go through
+   `devtools/simlab/runner.py`, which enforces a per-phase round budget
+   through its ledger (see [EXPERIMENTS.md](EXPERIMENTS.md)).
 
 ### Synchronisation and single source of truth
 
@@ -174,7 +190,7 @@ template.
 
 | Tier | Content | Where | Command |
 |---|---|---|---|
-| Devtools | Hygiene scanner, review-package generator, checker characterization | Both | `python -m pytest -q -p no:cacheprovider devtools/tests` |
+| Devtools | Hygiene scanner, review-package generator, checker characterization, agent unit and offline-integration tests (`test_eod_agent.py`), truth-logger test | Both | `python -m pytest -q -p no:cacheprovider devtools/tests` |
 | A (no GL) | `test_bomb_deployer`, `test_drone_distance_sensors`, `test_generate_mock_map_prediction`, `test_json_to_map`, `test_map_exploration_properties`, `test_map_wall_editor`, `test_score_manager`, `test_timer`, `test_trajectory`, `test_utils`, `test_utils_noise`, `test_wall` | Both | `python -m pytest -q -p no:cacheprovider <files>` |
 | B (needs a GL context) | The other 15 files in `tests/` | Server, EGL headless | `PYGLET_HEADLESS=True PYGLET_HEADLESS_DEVICE=<n> python -m pytest -q -p no:cacheprovider <files>` |
 | Static checker | Workspace and package checks | Both | `./check_submission.sh [teamNNN_<step>.zip]` |
@@ -223,3 +239,9 @@ final commit.
 * R4: GPU ownership on the server is shared and dynamic: during Phase 0 an
   unrelated short job briefly used four GPUs with node-0 CPU affinity. Every
   run must re-inspect occupancy.
+* R5: agent compute. On the server the Phase 1 blue candidate runs at about
+  50 simulation steps per second with 10 drones (the supplied examples at
+  200-260): a full 2000-step Map01 round takes about 39 s of its 90 s limit,
+  a full 7200-step Map05 round would take about 144 s of 240 s. An evaluator
+  more than about 1.7 times slower (240 s / 144 s) would hit the wall-clock
+  limit on long rounds (see D1).
