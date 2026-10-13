@@ -7,7 +7,11 @@ host is not free for a run under the rules in docs/ENVIRONMENT.md:
 * every GPU must have no compute process and near-zero memory in use (an
   EGL graphics context does not appear among compute processes, but it does
   occupy memory, so memory is checked on every GPU, not only the target);
-* the CPUs this run will be pinned to must be essentially idle.
+* the CPUs this run will be pinned to must be essentially idle and all on
+  NUMA node 0 (node 1 is never used by this project).
+
+``--cpu-only`` (CPU-only Python work such as tests or the offline simulator)
+skips the GPU requirement; GPU state is still reported.
 
 ``--report-only`` always exits 0 (used after a run, for the record). The
 check never inspects or touches other users' processes beyond reading
@@ -82,10 +86,22 @@ def gpu_state() -> dict:
     return {"gpus": rows, "compute_apps": [a for a in apps if a.strip()]}
 
 
+def node0_cpus() -> list:
+    """CPUs of NUMA node 0 as reported by the kernel (empty if unknown)."""
+    try:
+        with open("/sys/devices/system/node/node0/cpulist", encoding="utf-8") as f:
+            return parse_cpu_list(f.read().strip())
+    except OSError:
+        return []
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cpus", required=True, help="CPU list this run uses")
-    parser.add_argument("--egl-device", type=int, required=True)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--egl-device", type=int)
+    target.add_argument("--cpu-only", action="store_true",
+                        help="CPU-only work: GPUs are reported but not required to be free")
     parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args(argv)
 
@@ -94,12 +110,16 @@ def main(argv=None) -> int:
     busy = cpu_busy(cpus)
     mean_busy = sum(busy.values()) / max(len(busy), 1)
     reasons = []
-    if gpu["compute_apps"]:
-        reasons.append("compute processes present on a GPU")
-    for row in gpu["gpus"]:
-        if row["memory_mib"] > GPU_MEMORY_BUSY_MIB or row["util_pct"] > GPU_UTIL_BUSY_PCT:
-            reasons.append(f"GPU {row['index']} in use "
-                           f"({row['memory_mib']} MiB, {row['util_pct']}%)")
+    node0 = node0_cpus()
+    if not node0 or not set(cpus) <= set(node0):
+        reasons.append("pinned CPUs are not all on NUMA node 0 (or node 0 is unknown)")
+    if not args.cpu_only:
+        if gpu["compute_apps"]:
+            reasons.append("compute processes present on a GPU")
+        for row in gpu["gpus"]:
+            if row["memory_mib"] > GPU_MEMORY_BUSY_MIB or row["util_pct"] > GPU_UTIL_BUSY_PCT:
+                reasons.append(f"GPU {row['index']} in use "
+                               f"({row['memory_mib']} MiB, {row['util_pct']}%)")
     if mean_busy > CPU_BUSY_FRACTION:
         reasons.append(f"pinned CPUs {mean_busy:.0%} busy")
     report = {
@@ -109,6 +129,7 @@ def main(argv=None) -> int:
         "cpu_mean_busy": round(mean_busy, 3),
         "cpu_max_busy": round(max(busy.values()) if busy else 0.0, 3),
         "egl_device": args.egl_device,
+        "cpu_only": bool(args.cpu_only),
         "gpu": gpu,
         "free": not reasons,
         "reasons": reasons,
