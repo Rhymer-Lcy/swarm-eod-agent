@@ -15,6 +15,7 @@ Invalid or foreign messages are ignored.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -42,6 +43,18 @@ def valid_messages(messages: Iterable[Any], own_id: int) -> List[Dict[str, Any]]
             continue
         out.append(msg)
     return out
+
+
+def numeric_tuple(item: Any, length: int) -> bool:
+    """True for a tuple of ``length`` finite numbers (message validation)."""
+    if not isinstance(item, tuple) or len(item) != length:
+        return False
+    for v in item:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return False
+        if not math.isfinite(v):
+            return False
+    return True
 
 
 @dataclass

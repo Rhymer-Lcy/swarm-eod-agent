@@ -33,7 +33,7 @@ import numpy as np
 
 from . import params as P
 from .base import BrainBase
-from .comms import make_message, valid_messages
+from .comms import make_message, numeric_tuple, valid_messages
 from .geometry import wrap
 from .motion import LocalView, drive, lookahead_point, rotation_toward
 from .observation import Command, Observation
@@ -48,6 +48,7 @@ EXPLORE_PERIOD = 40
 DELIVER_RANGE = 100.0
 DELIVER_TIMEOUT = 160
 FLEET_MAX_AGE = 200
+DIGEST_MEMORY = 4096      # remembered digest items before the set is reset
 
 
 class Bomb:
@@ -128,6 +129,7 @@ class RescueBrain(BrainBase):
         self.was_grasping = False
         self.disposals: List[Tuple[float, float, int]] = []
         self.detections: List[BombDetection] = []
+        self._digest_seen: set = set()
         self._dc_field: Optional[np.ndarray] = None
         self._dc_field_step = -10_000
         self.diag.update({"grasps": 0, "disposed": 0, "drops": 0, "grasp_timeouts": 0,
@@ -166,9 +168,13 @@ class RescueBrain(BrainBase):
             self.team.update(msg, now)
             self._read_fleet(msg)
             for item in msg.get("b", ()):
-                if isinstance(item, tuple) and len(item) == 4:
-                    self.bombs.merge_remote(float(item[0]), float(item[1]), int(item[2]),
-                                            int(item[3]))
+                # Digests repeat every step; an item already applied is skipped
+                # (re-applying it could only recreate stale records).
+                if item in self._digest_seen or not numeric_tuple(item, 4):
+                    continue
+                self._digest_seen.add(item)
+                self.bombs.merge_remote(float(item[0]), float(item[1]), int(item[2]),
+                                        int(item[3]))
             claim = msg.get("cl")
             if isinstance(claim, tuple) and len(claim) == 3:
                 self.claims[sender] = (float(claim[0]), float(claim[1]), float(claim[2]),
@@ -186,8 +192,12 @@ class RescueBrain(BrainBase):
             if isinstance(box, tuple) and len(box) == 4 and self.dc.box is None:
                 self.dc.shared_box = tuple(float(v) for v in box)
             for item in msg.get("dp", ()):
-                if isinstance(item, tuple) and len(item) == 3:
-                    self.bombs.merge_remote(float(item[0]), float(item[1]), 2, int(item[2]))
+                if item in self._digest_seen or not numeric_tuple(item, 3):
+                    continue
+                self._digest_seen.add(item)
+                self.bombs.merge_remote(float(item[0]), float(item[1]), 2, int(item[2]))
+        if len(self._digest_seen) > DIGEST_MEMORY:
+            self._digest_seen.clear()
         for sender in list(self.claims):
             if now - self.claims[sender][3] > CLAIM_TIMEOUT:
                 del self.claims[sender]
