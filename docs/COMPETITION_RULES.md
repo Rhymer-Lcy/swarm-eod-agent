@@ -168,6 +168,9 @@ score or on submission validity.
 | D12 | Rule text "任何行数过多的做法" | Listed among prohibited techniques ("any approach with too many lines"). | No corresponding check exists; the intended meaning is unclear. | Medium |
 | D13 | `place_scoring` YAML defaults | Not documented. | A `place_scoring` section that sets `w_wall` or `w_time` without `blast_radius` defaults the radius to 100.0, which fails validation (must be in (0, 1]). The supplied plans have no such section. | Low (latent) |
 | D14 | `exploration_threshold_for_time_bonus` | Set to 90 in the supplied rescue plan. | Stored but not used by any score. | Informational |
+| D15 | Sign of `lateral` | Guide 02, section 4: positive `lateral` moves the drone to the right. | The thrust is applied along the body's local +y axis, which is to the left of the heading; a Phase 1 probe confirmed that `lateral = +1` moves the drone at +90 degrees (left). | Low (agents must use the measured sign) |
+| D16 | Scope of the ground-truth guard | Guide 02, section 5: `true_*()` raise inside `control()` in competition mode. | Correct, and only there: `define_message_for_all()` is called before `control()` outside the guard, so a `true_*()` call there would not raise. The static checker rejects any `true_*()` call in submitted code. This project's agents call none; the evaluation-only truth log uses the hook in development tooling only. | Informational |
+| D17 | Collision damage | Guide 02, section 6: health decreases by 1 per collision with a wall or drone. | The decrement has a cooldown of 1 wall-clock second (`Timer`), so the damage from continuous contact depends on the simulation speed of the evaluating machine. | Low |
 
 D1 and D2 can change rankings, and D7 and D12 affect how work should be
 planned. The questions that need the organizer's answer are drafted in
