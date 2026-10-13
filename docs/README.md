@@ -27,6 +27,7 @@ submission interface.
 | [RESEARCH.md](RESEARCH.md) | Method families assessed, selection and rejected alternatives, verified references |
 | [EXPERIMENTS.md](EXPERIMENTS.md) | Harness, benchmark partitions, run ledger, results with their uncertainty, failure analysis |
 | [PHASE1_REPORT.md](PHASE1_REPORT.md) | Phase 1 completion report and the next iteration |
+| [PHASE2_PLAN.md](PHASE2_PLAN.md) | Phase 2 evaluation plan, frozen before its first round: arms, scenarios, seeds, metrics, decision rules, round allocation |
 
 ## Repository layout
 
