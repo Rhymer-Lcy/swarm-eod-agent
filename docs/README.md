@@ -8,7 +8,10 @@ first functional candidates for both roles, B0.1 (blue, rescue) and R0.1
 (red, place), in `src/swarm_rescue/solutions/eod/`; see
 [PHASE1_REPORT.md](PHASE1_REPORT.md). Phase 2 (2026-10-13) replaced them with
 B1 and R1 after paired comparisons and kept the Phase 1 agents as a frozen
-comparator; see [PHASE2_REPORT.md](PHASE2_REPORT.md) for the status and limits.
+comparator; see [PHASE2_REPORT.md](PHASE2_REPORT.md). Phase 3 (2026-10-14)
+fixed delivery to partly walled disposal centers (B2) and red placement (R2),
+again against frozen comparators; see [PHASE3_REPORT.md](PHASE3_REPORT.md)
+for the status and limits.
 
 The baseline's own `README.md`, `INSTALL.md` and `doc/` (Chinese participant
 guides) are kept verbatim and remain authoritative for the simulator and the
@@ -31,6 +34,8 @@ submission interface.
 | [PHASE1_REPORT.md](PHASE1_REPORT.md) | Phase 1 completion report and the next iteration |
 | [PHASE2_PLAN.md](PHASE2_PLAN.md) | Phase 2 evaluation plan, frozen before its first round: arms, scenarios, seeds, metrics, decision rules, round allocation |
 | [PHASE2_REPORT.md](PHASE2_REPORT.md) | Phase 2 completion report: estimator fix, B1 and R1, parity, budget, generalization, open defects |
+| [PHASE3_PLAN.md](PHASE3_PLAN.md) | Phase 3 evaluation plan, frozen before its first round, with dated addenda |
+| [PHASE3_REPORT.md](PHASE3_REPORT.md) | Phase 3 completion report: Map03 delivery root cause, B2, red diagnosis and R2, budget, limits |
 
 ## Repository layout
 
