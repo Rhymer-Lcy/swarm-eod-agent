@@ -158,6 +158,7 @@ def test_planner_routes_around_a_wall_and_fallback_agrees():
     wave = _wavefront(planner.cost(False), [goal])
     assert np.isfinite(wave[start]) == np.isfinite(field[start])
 
+
 def test_descend_starts_from_inside_an_inflation_margin():
     # Regression for the first real blue round: a drone next to a wall sits in
     # an impassable (inflated) cell and must still get a path.
@@ -226,6 +227,8 @@ def test_bomb_detection_uses_semantic_and_lidar():
     assert dets[0].y == pytest.approx(0.0, abs=2.0)
     mask = entity_mask(sem, lidar, ANGLES)
     assert mask[np.abs(ANGLES) < 0.05].all() and not mask[np.abs(ANGLES) > 0.4].all()
+    assert not entity_mask(sem, lidar, ANGLES, kinds=("DISPOSAL_CENTER",)).any()
+    assert entity_mask(sem, lidar, ANGLES, kinds=("BOMB",))[np.abs(ANGLES) < 0.05].all()
 
 
 def test_disposal_center_model_box_and_distance():

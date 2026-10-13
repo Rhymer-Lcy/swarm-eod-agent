@@ -227,9 +227,9 @@ class RescueBrain(BrainBase):
             self._expire_missing(obs, fresh)
         if obs.lidar is not None and (obs.step + self.id) % P.SCAN_PERIOD == 0 \
                 and est.steps_without_gps < 60:
-            _, _, invalid = self._lidar_mask(
+            _, _, transient, _ = self._lidar_mask(
                 obs, [(b.x, b.y) for b in self.bombs.items if b.status != 2])
-            self._integrate(obs, invalid)
+            self._integrate(obs, transient)
 
     def _expire_missing(self, obs: Observation, fresh: List[Bomb]) -> None:
         """A free bomb close by and in sight that is not detected is gone."""

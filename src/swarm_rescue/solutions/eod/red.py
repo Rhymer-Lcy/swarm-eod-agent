@@ -174,11 +174,12 @@ class PlaceBrain(BrainBase):
             return
         if est.steps_without_gps >= 40:
             return
-        _, _, invalid = self._lidar_mask(obs, self.placed)
-        self._integrate(obs, invalid)
+        _, _, transient, center = self._lidar_mask(obs, self.placed)
+        self._integrate(obs, transient)
         if est.position_sigma <= 8.0:
+            # Wall evidence excludes the disposal center as well.
             self.evidence.add_returns(est.x, est.y, est.heading, obs.lidar, obs.lidar_angles,
-                                      ~invalid & (obs.lidar < P.LIDAR_NO_HIT))
+                                      ~(transient | center) & (obs.lidar < P.LIDAR_NO_HIT))
 
     def _track_inventory(self, obs: Observation) -> None:
         if self.prev_inventory is not None and obs.inventory < self.prev_inventory:

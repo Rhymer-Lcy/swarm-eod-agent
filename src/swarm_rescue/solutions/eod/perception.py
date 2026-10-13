@@ -77,12 +77,17 @@ def bomb_detections(x: float, y: float, heading: float,
 
 
 def entity_mask(semantic: Optional[Sequence[SemanticHit]], lidar: np.ndarray,
-                angles: np.ndarray) -> np.ndarray:
-    """Lidar rays whose return matches a semantic entity detection."""
+                angles: np.ndarray, kinds: Optional[Sequence[str]] = None) -> np.ndarray:
+    """Lidar rays whose return matches a semantic entity detection.
+
+    ``kinds`` restricts the match to some entity types (all when ``None``).
+    """
     mask = np.zeros(len(lidar), dtype=bool)
     if not semantic:
         return mask
     for h in semantic:
+        if kinds is not None and h.kind not in kinds:
+            continue
         surface = h.distance - P.SEMANTIC_BIAS
         diff = np.abs((angles - h.angle + math.pi) % (2 * math.pi) - math.pi)
         width = math.radians(7.0) + (0.12 if h.kind == "DISPOSAL_CENTER" else 0.0)

@@ -99,22 +99,32 @@ class BrainBase:
         return tuple(fleet)
 
     # -- perception -------------------------------------------------------------
-    def _lidar_mask(self, obs: Observation, extra_points=()) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Lidar end points and the mask of returns that are not walls."""
+    def _lidar_mask(self, obs: Observation, extra_points=()
+                    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Lidar end points and two masks of returns that are not walls.
+
+        ``transient``: returns on drones and bombs, which must neither be
+        mapped nor block planning. ``center``: returns on the disposal
+        center, a solid obstacle for navigation that is not a wall.
+        """
         est = self.est
         lidar = obs.lidar
         ex, ey = lidar_endpoints(est.x, est.y, est.heading, lidar, obs.lidar_angles)
-        invalid = entity_mask(obs.semantic, lidar, obs.lidar_angles)
-        invalid |= near_points_mask(ex, ey, self.team.positions(obs.step, 4), 24.0)
+        transient = entity_mask(obs.semantic, lidar, obs.lidar_angles,
+                                kinds=("DRONE", "BOMB", "OTHER"))
+        transient |= near_points_mask(ex, ey, self.team.positions(obs.step, 4), 24.0)
         if extra_points:
-            invalid |= near_points_mask(ex, ey, list(extra_points), 20.0)
-        invalid |= self.dc.inside(ex, ey, 8.0)
-        return ex, ey, invalid
+            transient |= near_points_mask(ex, ey, list(extra_points), 20.0)
+        center = entity_mask(obs.semantic, lidar, obs.lidar_angles, kinds=("DISPOSAL_CENTER",))
+        center |= self.dc.inside(ex, ey, 8.0)
+        center &= ~transient
+        return ex, ey, transient, center
 
-    def _integrate(self, obs: Observation, invalid: np.ndarray) -> None:
+    def _integrate(self, obs: Observation, transient: np.ndarray) -> None:
+        """Navigation grid update: walls and the disposal center are obstacles."""
         est = self.est
         self.grid.integrate_scan(est.x, est.y, est.heading, obs.lidar, obs.lidar_angles,
-                                 ~invalid, max_free=self.FREE_RANGE)
+                                 ~transient, max_free=self.FREE_RANGE)
         self._mark_searched(obs.lidar, obs.lidar_angles)
 
     def _mark_searched(self, lidar: np.ndarray, angles: np.ndarray) -> None:
