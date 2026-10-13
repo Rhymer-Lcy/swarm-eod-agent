@@ -6,7 +6,9 @@ repository holds the competition baseline exactly as supplied, plus this
 project's agents, documentation and tooling. Phase 1 (2026-10-13) added the
 first functional candidates for both roles, B0.1 (blue, rescue) and R0.1
 (red, place), in `src/swarm_rescue/solutions/eod/`; see
-[PHASE1_REPORT.md](PHASE1_REPORT.md) for their status and limits.
+[PHASE1_REPORT.md](PHASE1_REPORT.md). Phase 2 (2026-10-13) replaced them with
+B1 and R1 after paired comparisons and kept the Phase 1 agents as a frozen
+comparator; see [PHASE2_REPORT.md](PHASE2_REPORT.md) for the status and limits.
 
 The baseline's own `README.md`, `INSTALL.md` and `doc/` (Chinese participant
 guides) are kept verbatim and remain authoritative for the simulator and the
@@ -28,6 +30,7 @@ submission interface.
 | [EXPERIMENTS.md](EXPERIMENTS.md) | Harness, benchmark partitions, run ledger, results with their uncertainty, failure analysis |
 | [PHASE1_REPORT.md](PHASE1_REPORT.md) | Phase 1 completion report and the next iteration |
 | [PHASE2_PLAN.md](PHASE2_PLAN.md) | Phase 2 evaluation plan, frozen before its first round: arms, scenarios, seeds, metrics, decision rules, round allocation |
+| [PHASE2_REPORT.md](PHASE2_REPORT.md) | Phase 2 completion report: estimator fix, B1 and R1, parity, budget, generalization, open defects |
 
 ## Repository layout
 
