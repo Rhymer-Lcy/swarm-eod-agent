@@ -177,6 +177,27 @@ The server is shared. These rules apply to every job:
    `devtools/simlab/runner.py`, which enforces a per-phase round budget
    through its ledger (see [EXPERIMENTS.md](EXPERIMENTS.md)).
 
+10. **Remote-first Python (owner directive, 2026-10-13).** All Python
+    execution, including unit tests, static checks written in Python, the
+    submission checker, offline simulation, profiling and analysis, runs in the
+    project environment on the server; the workstation is for editing, Git,
+    GitHub and SSH and does not run Python. The interpreter is called by its
+    absolute path: a non-interactive SSH shell does not initialize conda and its
+    `PATH` contains no `python` (found when an ad hoc batch failed; see
+    EXPERIMENTS.md, 7.9). CPU-only work goes through
+    `devtools/simlab/remote_cpu.sh`: the occupancy gate in CPU-only mode
+    requires the pinned CPUs to be idle and on NUMA node 0 (it reads
+    `/sys/devices/system/node/node0/cpulist`), then the command runs with
+    `taskset`, one thread per library and a timeout; no GPU is required.
+    Batches of offline runs go through `devtools/simlab/offline_batch.sh`,
+    which records every job's exit status and never overwrites an earlier
+    attempt. The official `check_submission.sh` picks `python3` from `PATH`;
+    on the server it is run with the environment's `bin` first in `PATH` and
+    `VIRTUAL_ENV` set, so that it uses the project interpreter (unmodified
+    script). Uncommitted work is tested in a separate scratch worktree of the
+    server clone, so the clone used for ledgered rounds stays clean and at a
+    committed state.
+
 ### Synchronisation and single source of truth
 
 The workstation repository is the only place commits are made, and GitHub is
@@ -239,9 +260,10 @@ final commit.
 * R4: GPU ownership on the server is shared and dynamic: during Phase 0 an
   unrelated short job briefly used four GPUs with node-0 CPU affinity. Every
   run must re-inspect occupancy.
-* R5: agent compute. On the server the Phase 1 blue candidate runs at about
+* R5: agent compute. On the server the Phase 1 blue candidate ran at about
   50 simulation steps per second with 10 drones (the supplied examples at
-  200-260): a full 2000-step Map01 round takes about 39 s of its 90 s limit,
-  a full 7200-step Map05 round would take about 144 s of 240 s. An evaluator
-  more than about 1.7 times slower (240 s / 144 s) would hit the wall-clock
-  limit on long rounds (see D1).
+  200-260); the Phase 2 candidate B1 runs at 70-73 on Map01 and Map02 and
+  66-68 on Map03-Map05. A full 7200-step round at 68 steps/s would take about
+  106 s of its 240 s limit, so an evaluator more than about 2.3 times slower
+  than this server would hit the wall-clock limit on such a round (see D1).
+  The evaluator's speed is unknown.
