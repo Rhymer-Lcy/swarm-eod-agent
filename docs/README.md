@@ -3,8 +3,10 @@
 Engineering workspace for an autonomous multi-drone explosive ordnance
 disposal (EOD) competition built on the `swarm-rescue` simulator. The
 repository holds the competition baseline exactly as supplied, plus this
-project's documentation and tooling. The competition agent itself is future
-work (Phase 1 onward).
+project's agents, documentation and tooling. Phase 1 (2026-10-13) added the
+first functional candidates for both roles, B0.1 (blue, rescue) and R0.1
+(red, place), in `src/swarm_rescue/solutions/eod/`; see
+[PHASE1_REPORT.md](PHASE1_REPORT.md) for their status and limits.
 
 The baseline's own `README.md`, `INSTALL.md` and `doc/` (Chinese participant
 guides) are kept verbatim and remain authoritative for the simulator and the
@@ -21,6 +23,10 @@ submission interface.
 | [ENVIRONMENT.md](ENVIRONMENT.md) | Python 3.11 environments, OpenGL findings, remote execution rules, test tiers and results, open risks |
 | [WORKFLOW.md](WORKFLOW.md) | Git conventions, public/private separation, hygiene scanner, publication gate, review packages |
 | [PHASE0_REPORT.md](PHASE0_REPORT.md) | Phase 0 completion report and entry conditions for the next phase |
+| [AGENT_DESIGN.md](AGENT_DESIGN.md) | Verified simulator facts, agent architecture, blue and red policies, known defects |
+| [RESEARCH.md](RESEARCH.md) | Method families assessed, selection and rejected alternatives, verified references |
+| [EXPERIMENTS.md](EXPERIMENTS.md) | Harness, benchmark partitions, run ledger, results with their uncertainty, failure analysis |
+| [PHASE1_REPORT.md](PHASE1_REPORT.md) | Phase 1 completion report and the next iteration |
 
 ## Repository layout
 
@@ -28,12 +34,15 @@ submission interface.
 .                         baseline root, as supplied (pyproject.toml, README.md, LICENSE, ...)
 ├── src/swarm_rescue/     simulator package (framework: do not modify)
 │   └── solutions/        the only place for competition agent code
+│       ├── my_drone_eval.py   entry point (selects the eod agents)
+│       └── eod/               blue and red agents and their components
 ├── config/               official local evaluation plans (do not modify)
 ├── doc/                  official participant and developer guides (Chinese)
 ├── tests/                baseline test suite
 ├── scripts/, *.sh        official checker and packaging scripts
 ├── docs/                 this project's documentation (English)
 ├── devtools/             project tooling: hygiene scanner, review packages, OpenGL probe, tests
+│   └── simlab/           simulation harness, probes, fixtures, offline approximation
 ├── environments/         conda specification and resolved package locks
 ├── _local/               ignored: original archives, private notes, logs, runs
 └── _review_packages/     ignored: generated review ZIPs
