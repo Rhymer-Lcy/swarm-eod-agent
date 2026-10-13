@@ -76,6 +76,27 @@ def _truth_candidates(fx) -> np.ndarray:
     return dist >= 17.0
 
 
+def _solid_inference(brains, truth: np.ndarray):
+    """Area the drones take as solid obstacle interior (R2 placement weights):
+    its size, the share of it that is truth wall (precision) and the share of
+    all truth wall it covers. ``None`` for agents without the inference or
+    when nothing is taken as solid."""
+    solid = np.zeros(truth.shape, dtype=bool)
+    for b in brains:
+        if not hasattr(b, "_solid_interiors"):
+            return None
+        s = b._solid_interiors()
+        k = int(b.grid.cell)
+        up = np.kron(s.astype(np.uint8), np.ones((k, k), np.uint8))[:truth.shape[0],
+                                                                     :truth.shape[1]]
+        solid[:up.shape[0], :up.shape[1]] |= up > 0
+    if not solid.any():
+        return None
+    hit = int((solid & (truth > 0)).sum())
+    return {"pixels": int(solid.sum()), "precision": round(hit / int(solid.sum()), 3),
+            "truth_wall_share": round(hit / max(int((truth > 0).sum()), 1), 3)}
+
+
 def greedy(weights_px: np.ndarray, allowed_px: np.ndarray, n: int, radius: int):
     """Greedy max-coverage centers (world coordinates) on a 1:4 grid."""
     h, w = weights_px.shape
@@ -131,7 +152,7 @@ def run(map_name: str, seed: int, drones: int = 5, agent: str = "current") -> di
     world = OfflineWorld(fx, "place", drones, factory, seed=seed, bombs_per_drone=2,
                          carry_ratio_sigma=0.36)
     t_place = brains[0].t_place
-    at_place = cand_place = None
+    at_place = cand_place = solid_place = None
     events = []        # one per placement: what the placer knew when it placed
     inventory = [d.inventory for d in world.drones]
     while True:
@@ -153,6 +174,7 @@ def run(map_name: str, seed: int, drones: int = 5, agent: str = "current") -> di
         if world.step_index == t_place:
             at_place = _team_map(brains, wallmap.render, wallmap.merge)
             cand_place = _agent_candidates(brains, fx["walls"].shape)
+            solid_place = _solid_inference(brains, fx["walls"])
         if not running:
             break
     at_end = _team_map(brains, wallmap.render, wallmap.merge)
@@ -190,6 +212,7 @@ def run(map_name: str, seed: int, drones: int = 5, agent: str = "current") -> di
                              "later_knew_earlier": knew, "same_drone": ev["drone"] == prev["drone"],
                              "later_target_age": ev["target_age"],
                              "later_emergency": ev["emergency"]})
+    solid_end = _solid_inference(brains, truth)
     from swarm_rescue.tools.map_exploration_scoring import scorer_for_walltime
     map_score = None
     if world.submitted is not None:
@@ -210,6 +233,8 @@ def run(map_name: str, seed: int, drones: int = 5, agent: str = "current") -> di
         "recall_at_end": round(recall(at_end, truth, boundary), 3),
         "redundancy": round(individual / union, 3) if union > 0 else None,
         "close_pairs": close_pairs,
+        "solid_inference_at_place": solid_place,
+        "solid_inference_at_end": solid_end,
         "overlaps": overlaps,
         "placements": [{k: e[k] for k in ("step", "drone", "xy", "target_age", "emergency")}
                        for e in events],
