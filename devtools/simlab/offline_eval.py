@@ -43,12 +43,24 @@ def agent_package(agent: str) -> str:
 
 
 def make_factory(role: str, fx: dict, n: int, timings: list, agent: str = "current",
-                 errors: list = None, profiler=None):
+                 errors: list = None, profiler=None, share: str = "default"):
     package = agent_package(agent)
     if role == "blue":
         RescueBrain = importlib.import_module(f"{package}.blue").RescueBrain
     else:
         PlaceBrain = importlib.import_module(f"{package}.red").PlaceBrain
+    if share != "default":
+        # Override the role's shared-exploration flags (development only).
+        base_cls = RescueBrain if role == "blue" else PlaceBrain
+        flags = {"SHARE_COVERAGE": share in ("on", "coverage"),
+                 "COMMIT_TARGETS": share in ("on", "commit")}
+        if not hasattr(base_cls, "SHARE_COVERAGE"):
+            raise SystemExit(f"agent {agent!r} has no shared-exploration flags")
+        override = type(base_cls.__name__, (base_cls,), flags)
+        if role == "blue":
+            RescueBrain = override
+        else:
+            PlaceBrain = override
 
     size = tuple(fx["size_area"])
 
@@ -133,6 +145,10 @@ def main(argv=None) -> int:
     parser.add_argument("--carry-ratio-sigma", type=float, default=0.0,
                         help="per-step spread of the carried rotation ratio (probe: 0.36)")
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--share", choices=["default", "on", "off", "coverage", "commit"],
+                        default="default",
+                        help="override the role's shared-exploration flags (coverage or "
+                             "commit enables only that part)")
     args = parser.parse_args(argv)
     fx = load_fixture(args.map)
     n = args.drones or (10 if args.role == "blue" else 5)
@@ -143,14 +159,14 @@ def main(argv=None) -> int:
     timings: list = []
     errors: list = []
     profiler = cProfile.Profile() if args.profile else None
-    factory = make_factory(args.role, fx, n, timings, args.agent, errors, profiler)
+    factory = make_factory(args.role, fx, n, timings, args.agent, errors, profiler, args.share)
     world = OfflineWorld(fx, "rescue" if args.role == "blue" else "place", n,
                          factory, seed=args.seed, bombs=bombs, max_steps=args.max_steps,
                          carry_ratio_sigma=args.carry_ratio_sigma)
     factory.timed_class.world = world
     t0 = time.perf_counter()
     summary = world.run()
-    summary["agent"] = args.agent
+    summary["agent"] = args.agent if args.share == "default" else f"{args.agent}+share-{args.share}"
     summary["wall_s"] = round(time.perf_counter() - t0, 1)
     if errors:
         err = np.array(errors)

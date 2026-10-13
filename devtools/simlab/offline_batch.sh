@@ -4,7 +4,9 @@
 #
 # Usage, from the repository root, normally under remote_cpu.sh:
 #   PYTHON=<absolute env interpreter> devtools/simlab/offline_batch.sh \
-#       <attempt-id> <role> "<map> <layout|-> <seed> <agent>" ...
+#       <attempt-id> <role> "<map> <layout|-> <seed> <agent> [share]" ...
+#
+# ``share`` is default, on or off (offline_eval --share).
 #
 # Each job writes <out>/<job>.json, <job>.err and <job>.rc under
 # _local/offline/<attempt-id>/, where the attempt directory must not exist
@@ -32,12 +34,14 @@ mkdir -p "$out"
 
 fails=0
 for spec in "$@"; do
-    read -r map layout seed agent <<< "$spec"
+    read -r map layout seed agent share <<< "$spec"
+    share="${share:-default}"
     job="${role}_${map}_${layout}_s${seed}_${agent}"
+    [ "$share" != "default" ] && job="${job}_share-${share}"
     lay=()
     [ "$layout" != "-" ] && lay=(--layout "_local/layouts/$layout.json")
     "$PYTHON" -m devtools.simlab.offline_eval --role "$role" --map "$map" "${lay[@]}" \
-        --seed "$seed" --agent "$agent" --carry-ratio-sigma 0.36 \
+        --seed "$seed" --agent "$agent" --share "$share" --carry-ratio-sigma 0.36 \
         > "$out/$job.json" 2> "$out/$job.err"
     rc=$?
     echo "$rc" > "$out/$job.rc"
