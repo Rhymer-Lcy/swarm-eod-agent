@@ -20,8 +20,14 @@
   appended after a banner. `docs/` is re-included explicitly because the
   baseline ignores `/docs`. A repository-local `.git/info/exclude` repeats
   `/_local/` and `/_review_packages/` as a second guard.
-* Before every commit: inspect the staged file list and diff, then run
-  `python devtools/check_repo_hygiene.py --index`.
+* Before every commit: inspect the staged file list and diff, then check the
+  staged diff against the owner's private patterns with the workstation's
+  non-Python helper (kept in `_local/ops/`, it joins the pattern list into
+  one PCRE for `grep -P`; it was checked to fire on planted matches). Since
+  the remote-first policy (2026-10-13) the Python scanner runs on the server
+  against the bundled commits (`--history`, before every push); it reports
+  `private_patterns_loaded: 0` there by design, because the pattern list
+  never leaves the workstation.
 * The tag `baseline-supplied-5.1.3` marks the pristine import. Project diffs
   and the review package are computed against it.
 
