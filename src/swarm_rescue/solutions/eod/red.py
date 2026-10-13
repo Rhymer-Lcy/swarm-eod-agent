@@ -8,7 +8,9 @@ is submitted by 0.5 T):
   wall evidence;
 * 0.25 T - 0.40 T, place: each drone with inventory picks the reachable
   free spot with the highest marginal blast coverage of the walls on its
-  current team map (border walls weigh 0.5), net of travel cost and with a
+  current team map (border walls weigh 0.5; in R2, unknown regions of its
+  occupancy grid enclosed by obstacles weigh as solid wall, because solid
+  obstacles count with their whole area), net of travel cost and with a
   mild preference for spots far from the disposal center; spots are claimed
   over the radio and the claims are relayed with their age (R2), the lower
   identifier keeps a contested area, and a target is given up as soon as a
@@ -51,6 +53,7 @@ TRAVEL_WEIGHT = 0.3
 FAR_BONUS = 0.12
 CLAIM_TTL = 80             # steps a (possibly relayed) placement claim stays valid
 OVERLAP = 0.8              # targets closer than this many blast radii overlap
+SOLID_MAX_AREA = 70000.0   # px^2; larger enclosed unknown regions are not taken as solid
 
 
 class PlaceBrain(BrainBase):
@@ -85,7 +88,8 @@ class PlaceBrain(BrainBase):
         self.submitted = False
         self.final_map: Optional[np.ndarray] = None
         self.diag.update({"placed": 0, "place_retries": 0, "emergency_drops": 0,
-                          "snapshots_held": 0, "submit_reason": "", "targets_dropped": 0})
+                          "snapshots_held": 0, "submit_reason": "", "targets_dropped": 0,
+                          "solid_cells": 0})
 
     # ------------------------------------------------------------------ API
     def step(self, obs: Observation) -> Command:
@@ -346,6 +350,18 @@ class PlaceBrain(BrainBase):
                           dc_box=self.dc.bbox())
         s = COVER_SCALE
         weights = wall_weights(wall_map, s)
+        # Solid obstacles count with their whole area in the wall score, but
+        # the lidar only sees their outline: enclosed unknown regions of the
+        # occupancy grid weigh as solid wall here (placement only; the
+        # submitted map is unchanged).
+        solid = self._solid_interiors()
+        if solid.any():
+            k = int(self.grid.cell) // s
+            up = np.kron(solid.astype(np.float32), np.ones((k, k), np.float32))
+            up = up[:weights.shape[0], :weights.shape[1]] * float(s * s)
+            weights[:up.shape[0], :up.shape[1]] = np.maximum(
+                weights[:up.shape[0], :up.shape[1]], up)
+            self.diag["solid_cells"] = int(solid.sum())
         r_small = self.blast_radius / s
         covered = np.zeros_like(weights, dtype=np.uint8)
         taken = list(self.placed) + [(v[0], v[1]) for k, v in self.place_claims.items()
@@ -398,6 +414,40 @@ class PlaceBrain(BrainBase):
         if not np.isfinite(score[i]):
             return None
         return float(wx[i]), float(wy[i])
+
+    def _solid_interiors(self) -> np.ndarray:
+        """Unknown grid cells enclosed by occupied cells (interiors of solid
+        obstacles, which the lidar cannot see into).
+
+        A 4-connected region of unknown cells counts when none of its cells
+        is 4-adjacent to a free cell or lies on the grid edge (so an outline
+        with a gap, or unexplored space reachable from mapped free space, is
+        never filled) and its area is at most ``SOLID_MAX_AREA``. Regions
+        overlapping the observed disposal center (an obstacle for navigation,
+        mapped from outside like a box, but not a wall) are excluded.
+        """
+        g = self.grid
+        unknown = g.unknown().astype(np.uint8)
+        out = np.zeros(unknown.shape, dtype=bool)
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(unknown, connectivity=4)
+        if n <= 1:
+            return out
+        cross = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], np.uint8)
+        near_free = cv2.dilate(g.free().astype(np.uint8), cross) > 0
+        open_labels = set(np.unique(labels[near_free & (unknown > 0)]).tolist())
+        for edge in (labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]):
+            open_labels.update(np.unique(edge).tolist())
+        box = self.dc.bbox()
+        if box is not None:
+            r0, c0 = g.to_cell(box[0] - 16.0, box[3] + 16.0)
+            r1, c1 = g.to_cell(box[2] + 16.0, box[1] - 16.0)
+            open_labels.update(np.unique(labels[r0:r1 + 1, c0:c1 + 1]).tolist())
+        max_cells = SOLID_MAX_AREA / (g.cell * g.cell)
+        keep = [i for i in range(1, n) if i not in open_labels
+                and stats[i, cv2.CC_STAT_AREA] <= max_cells]
+        if keep:
+            out = np.isin(labels, keep)
+        return out
 
     # -- map ------------------------------------------------------------------
     def _build_map(self) -> np.ndarray:
