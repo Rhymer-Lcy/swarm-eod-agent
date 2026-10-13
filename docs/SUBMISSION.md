@@ -29,7 +29,22 @@ if both exist. The checker only verifies by AST that one of them is defined
 and that the file parses. Drone classes subclass
 `simulation.drone.drone_abstract.DroneAbstract` and implement
 `define_message_for_all()` and `control()`; red commands add `place_bomb`.
-The baseline entry point currently returns the supplied example agents.
+Since Phase 1 the entry point returns this project's agents:
+`EodRescueDrone` for `rescue` and `EodPlaceDrone` for `place`
+(`solutions/eod/shell.py`). Their modules live in the subpackage
+`solutions/eod/` and are imported as `swarm_rescue.solutions.eod`; the
+packaging script zips them as `eod/...` at the package root, which the checker
+accepts (no entry contains a forbidden marker or prefix). The agents need no
+packages beyond the framework's own dependencies (NumPy, OpenCV; scikit-image
+is used when importable, with an OpenCV fallback), so the root `req.txt`
+stays empty. They print nothing.
+
+Validation on 2026-10-13: `scripts/check_submission.py` passed in workspace
+mode, and on a test package built like `create_zip_submission.sh` (21 entries,
+47,354 bytes) with the placeholder identity and the validation-only name
+`team000_preliminary.zip`. That package was not submitted and is not kept in
+the repository. A passing static check does not show that online evaluation
+will succeed.
 
 ## Package layout
 
