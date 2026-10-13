@@ -67,7 +67,7 @@ class BrainBase:
 
     def _begin(self, obs: Observation) -> bool:
         """Estimator update; False until the pose is initialized."""
-        self.est.update(obs.gps, obs.compass, obs.odometer)
+        self.est.update(obs.gps, obs.compass, obs.odometer, grasping=obs.grasping)
         if not self.est.initialized:
             return False
         if self.home is None:

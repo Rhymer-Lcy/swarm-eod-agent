@@ -50,8 +50,19 @@ GPS_NOISE = 5.0
 COMPASS_NOISE = math.radians(4.0)
 COMM_RANGE = 250.0
 
+ODOMETER_THETA_NOISE = math.radians(1.0)
+
+# --- carried rotation (grasp probe P3, 252 carrying steps) -----------------------
+# Ratio of the realized to the commanded rotation while a bomb is held:
+# median 0.39, 10th percentile -0.01, 90th percentile 0.90. Used only when the
+# odometer is unavailable; the spread is the 10-90 range divided by 2.56.
+CARRY_ROTATION_RATIO = 0.39
+CARRY_ROTATION_RATIO_SIGMA = 0.36
+
 # --- estimator --------------------------------------------------------------------
 HEADING_GAIN_MIN = 0.004
+HEADING_GAIN_MAX = 0.5
+CONTACT_HEADING_GAIN = 0.03
 POSITION_GAIN_BASE = 0.03
 POSITION_GAIN_PER_SPEED = 0.006
 DISTURBED_POSITION_GAIN = 0.15
