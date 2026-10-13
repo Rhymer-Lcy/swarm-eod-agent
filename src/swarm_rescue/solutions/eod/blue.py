@@ -512,4 +512,8 @@ class RescueBrain(BrainBase):
             return lookahead_point(path, est.x, est.y, P.WAYPOINT_LOOKAHEAD,
                                    lambda px, py: self.grid.clear_along(est.x, est.y, px, py))
         surface = self.dc.nearest_surface(est.x, est.y)
-        return surface if surface is not None else (est.x, est.y)
+        if surface is None:
+            return est.x, est.y
+        # No route in the center's field: plan to the surface point from here
+        # rather than pushing straight at it through whatever lies between.
+        return self._path_target(obs, surface)

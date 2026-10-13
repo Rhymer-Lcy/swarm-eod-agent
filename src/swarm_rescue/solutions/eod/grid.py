@@ -220,7 +220,22 @@ class Planner:
         r, c = start
         ny, nx = field.shape
         if not np.isfinite(field[r, c]):
-            return []
+            # The start lies inside an inflation margin (a drone close to a
+            # wall): begin from the cheapest reachable cell nearby instead
+            # of giving up on planning.
+            found = None
+            for rad in range(1, 5):
+                r0, r1 = max(r - rad, 0), min(r + rad + 1, ny)
+                c0, c1 = max(c - rad, 0), min(c + rad + 1, nx)
+                window = field[r0:r1, c0:c1]
+                if np.isfinite(window).any():
+                    k = int(np.argmin(np.where(np.isfinite(window), window, np.inf)))
+                    found = (r0 + k // (c1 - c0), c0 + k % (c1 - c0))
+                    break
+            if found is None:
+                return []
+            r, c = found
+            path.append(found)
         for _ in range(max_len):
             best = (field[r, c], r, c)
             for dr in (-1, 0, 1):

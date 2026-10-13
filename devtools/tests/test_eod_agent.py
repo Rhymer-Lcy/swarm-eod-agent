@@ -158,6 +158,22 @@ def test_planner_routes_around_a_wall_and_fallback_agrees():
     wave = _wavefront(planner.cost(False), [goal])
     assert np.isfinite(wave[start]) == np.isfinite(field[start])
 
+def test_descend_starts_from_inside_an_inflation_margin():
+    # Regression for the first real blue round: a drone next to a wall sits in
+    # an impassable (inflated) cell and must still get a path.
+    grid = OccupancyGrid((400, 400))
+    grid.logodds[:, :] = P.LOGODDS_MIN
+    r0, c = grid.to_cell(0.0, 120.0)
+    r1, _ = grid.to_cell(0.0, -60.0)
+    grid.logodds[r0:r1 + 1, c] = P.LOGODDS_MAX
+    planner = Planner(grid)
+    start = grid.to_cell(10.0, 50.0)                  # 10 px from the wall
+    goal = grid.to_cell(-100.0, 0.0)                  # other side of the wall
+    field = planner.field([goal], allow_unknown=False)
+    assert not np.isfinite(field[start])
+    path = planner.descend(field, start)
+    assert len(path) > 2 and path[-1] == goal
+
 
 # ------------------------------------------------------------------ motion
 def test_stopping_distance_and_speed_limit_are_consistent():
