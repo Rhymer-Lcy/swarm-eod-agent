@@ -144,3 +144,33 @@ library, one GPU through EGL).
 * No round beyond 30, no sweeps, no parallel rounds.
 
 ## Addenda
+
+### Addendum 1 (2026-10-13, after 13 of 30 rounds; before any red round)
+
+* **Blue decision (section 7 rules, rounds 1-12).** Over the six pairs B1
+  disposed 60 bombs against 53, fewer in no pair (more in three, equal in
+  three); no crash, wall-clock termination or brain error; carrying heading
+  error p95 of B1 6.8-9.3 degrees per round (B0.1: 37.0-50.9). **B1 is
+  adopted.** Per-round values are in EXPERIMENTS.md.
+* **Blue parity (round 13).** The native B1 round on the B-1 configuration
+  ended exactly like the instrumented one (all bombs at step 1551, score
+  87.82); steps per second 72.2 native against 71.1 instrumented.
+* **R1 frozen** at the commit that adds this addendum (agent code identical
+  to `290c077`): R0.1 plus team coverage gossip and target commitment for
+  red (`SHARE_COVERAGE`, `COMMIT_TARGETS`, frontier cells kept as targets),
+  border bands clipped to the observed span, and the shared compute changes.
+  Development evidence, offline only, on the development maps Map01 and
+  Map02: with frontier cells dropped in covered blocks, sharing lowered the
+  Map02 map score (92.7 and 96.0 against 97.7 and 97.8 for R0.1); with them
+  kept (R1), Map01 scored 92.6/92.5/92.5 against 92.4/91.0/92.5 and Map02
+  97.8/97.5 against 97.7/97.8. The offline simulator does not reproduce the
+  real Map01 coverage failure of Phase 1, so these runs show only that R1 is
+  not worse offline; whether it helps is the question of the red pairs.
+* **Blue keeps sharing off.** Offline, blue with sharing on finished Map01
+  S1 seeds 1-3 at steps 1564/1803/1457 against 1388/1494/1570 with it off,
+  with about 25 % more controller time; not adopted for blue.
+* **Code of the later blue rounds.** The blue held-out and cross-role rounds
+  run at this addendum's commit. Its blue behaviour equals B1: the added code
+  is disabled for blue (flags off) apart from diagnostic counters, and an
+  offline run reproduced B1's result exactly (same completion step, score,
+  health loss and heading errors).
