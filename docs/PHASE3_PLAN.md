@@ -221,3 +221,17 @@ steps per second.
   `devtools.comparators.p2_540054b.shell:EodPlaceDrone`; both arms place
   10 bombs with 5 drones. N-4 (native, Map04 seed 84) runs only if R2 is
   adopted under section 7.
+
+### Addendum 3 (2026-10-14, after 28 of 30 rounds)
+
+* **Red decision (section 7 rules, rounds 22-27, all at `5e0803d`).** Over
+  the three red pairs, mean wall score 78.81 for R2 against 54.61 for R1
+  (higher in all three; sign test p = 0.25), mean map score 95.48 against
+  95.10, mean partial score 73.50 against 68.47; both arms submitted a map
+  and placed all 10 bombs in every round; no brain errors. **R2 is
+  adopted.** Per-round values are in EXPERIMENTS.md, section 8.
+* **N-4 (round 28, native).** R2 on Map04 seed 84: map 96.23, wall 64.96,
+  partial 71.11, submitted at step 2350.
+* **Reserve.** Neither reserve round is used: no diagnosis requires one. The
+  blue agent files at the final commit are byte-identical to those of the
+  blue rounds (`bb569c3`); only `red.py` changed afterwards.
