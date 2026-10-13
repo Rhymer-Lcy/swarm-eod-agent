@@ -1,10 +1,12 @@
 # Agent design: interfaces, architecture and role policies
 
-Dates are business dates in UTC+8. Status as of 2026-10-13: candidates **B0.1**
-(blue, rescue) and **R0.1** (red, place) are implemented under
+Dates are business dates in UTC+8. Status as of 2026-10-13 (end of Phase 2):
+candidates **B1** (blue, rescue) and **R1** (red, place) are implemented under
 `src/swarm_rescue/solutions/eod/` and selected by
-`solutions/my_drone_eval.py`. They are first functional candidates, not
-tuned or competitive-proven agents; measured results and their limits are in
+`solutions/my_drone_eval.py`; the Phase 1 candidates B0.1 and R0.1 are kept
+as the frozen comparator `devtools/comparators/p1_ddc6897`. B1 and R1 were
+adopted on paired comparisons with few rounds; they are not
+competitive-proven. Measured results and their limits are in
 [EXPERIMENTS.md](EXPERIMENTS.md), method selection in [RESEARCH.md](RESEARCH.md).
 
 ## 1. Verified simulator and participant-interface facts
@@ -42,7 +44,8 @@ simulator --(official measured API)--> shell.py ---Observation---> brain (blue.p
                                           ^                              |
                                           +-------------Command----------+
 brain = BrainBase (base.py) + role policy
-BrainBase: estimator.py, grid.py (+ planner), perception.py, motion.py, comms.py
+BrainBase: estimator.py, grid.py (+ planner), perception.py, motion.py, comms.py,
+           coverage.py (enabled per role)
 red only:  wallmap.py
 ```
 
@@ -59,24 +62,27 @@ red only:  wallmap.py
 * **Per-step pipeline.** estimate pose; read messages; perceive (bombs,
   disposal center, lidar masking, map update every second step); decide;
   record the command for the next prediction; compose the outgoing message.
-* **Compute.** Measured on the remote server: blue about 50 simulation steps
-  per second with 10 drones, red 79-87 with 5 drones (simulator included;
-  the supplied examples run at 200-260). The dominant cost is geodesic field
-  computation, cached per drone for up to 25 steps.
+* **Compute.** Measured on the remote server in Phase 2: B1 70-73 simulation
+  steps per second with 10 drones on Map01 and Map02 and 66-68 on Map03-Map05
+  (B0.1: 49-53), R1 85-99 with 5 drones (R0.1: 76-89); simulator included,
+  the supplied examples run at 200-260. B1's controllers take about 0.87 ms
+  per drone-step (B0.1: 1.37). A profile showed that the Phase 1 assumption
+  (geodesic fields dominate) was wrong; see EXPERIMENTS.md, section 7.8.
 
 ## 3. Shared components
 
 | Component | File | Design |
 |---|---|---|
-| Pose estimator | `estimator.py` | Dead reckoning with the exact motion model; the odometer flags model violations (contact, carrying) and then supplies the measured displacement and rotation; GPS and compass correct with running-average gains that settle at a floor (0.03 + 0.006 x speed for position, 0.004 for heading). Offline: heading RMS 1.4 degrees, position RMS 6.8 px. Real runs: see the defect in section 7. |
+| Pose estimator | `estimator.py` | Dead reckoning with the exact motion model; GPS and compass correct with small gains (position: 0.03 + 0.006 x speed, raised after a disturbance). **Heading (B1, carry-aware):** an unloaded step uses the exact rotation model unless the odometer contradicts it by more than 3.5 degrees (contact), as in Phase 1. A step that may involve a bomb (held when the command was issued or held now, so grasp and release transitions included) or whose command is unknown uses the measured odometer rotation unconditionally (noise 1 degree per step); without an odometer, a carrying step is predicted with the probe's median ratio 0.39 and a variance from its 10-90 % spread. A heading variance is propagated and the compass gain is `P / (P + R)` (R = (4 degrees)^2), bounded to [0.004, 0.5]: for unloaded flight this equals Phase 1's running average exactly; while carrying it settles near 0.2. Gain choice: for a compass error that is AR(1) with phi 0.98 and an odometer random walk of 1 degree per step, the steady-state heading error of a complementary filter is flat at 4.1-4.7 degrees RMS for gains 0.05-0.3 and rises to 5.4 at 0.025 (closed form; a direct simulation of the filter gives 4.0-4.5 and 5.3), so the Kalman gain near 0.2 lies in that flat optimum. Commands are consumed once, so a step after a brain failure (zero command applied) is treated as unknown. Real rounds: carrying heading error p95 6.8-9.3 degrees (B0.1 in the same paired rounds: 37.0-50.9). |
+| Coverage summary | `coverage.py` | Grow-only bitmap of 32 px blocks searched by the team (a block counts once half of its non-occupied cells are searched), packed one bit per block (at most 234 bytes on the supplied maps), broadcast every 10 steps, merged by bitwise OR, so delayed, duplicate or stale messages and disconnections are harmless; payloads with other dimensions or lengths are rejected. Enabled for red only (section 5). |
 | Occupancy grid | `grid.py` | Log-odds on 8 px cells; per scan, end-point cells occupied and crossed cells free, once per cell; vectorized ray sampling on every second ray. Frontier cells exclude unknown slivers next to walls. |
 | Planner | `grid.py` | Geodesic cost fields with `skimage.graph.MCP_Geometric` (compiled), OpenCV wavefront fallback when scikit-image is missing; obstacles inflated by 24 px; goals and starts inside the inflation margin get a short expensive corridor. |
 | Motion | `motion.py` | Holonomic control: desired world velocity turned into thrust by one-step inversion of the model; speed capped by the measured braking distance to the lidar corridor clearance; short-range repulsion from walls and teammates; line-of-sight lookahead on the path; stuck monitor with recovery. |
 | Perception | `perception.py` | Bomb centres from grouped semantic rays refined with matching lidar rays (error median 2.6 px with true pose); lidar returns on drones, bombs and the disposal center are masked; disposal-center surface points and a robust box. |
 | Protocol | `comms.py` | Versioned dictionaries of immutable values; receivers copy what they need and never keep a reference to another drone's objects. |
-| Navigation core | `base.py` | Search layer (cells seen within the semantic search range), exploration target choice with team spreading and an initial identifier-based sector bias, path following, recovery, fleet gossip. |
+| Navigation core | `base.py` | Search layer (cells seen within the semantic search range), exploration target choice with team spreading and an initial identifier-based sector bias, path following, recovery, fleet gossip. Per-role flags: `SHARE_COVERAGE` (teammates' covered blocks count as searched), `COVERAGE_DROPS_FRONTIER` (whether frontier cells in covered blocks are dropped too) and `COMMIT_TARGETS` (keep an exploration target until it is reached or covered, its travel-time budget of 60-400 steps expires, or a lower identifier targets the same area within 100 px). |
 
-## 4. Blue candidate B0.1 (`blue.py`)
+## 4. Blue candidate B1 (`blue.py`; B0.1 differences noted)
 
 * **States:** `explore`, `goto`, `approach`, `carry`, `deliver`, `idle`,
   recovery.
@@ -94,15 +100,30 @@ red only:  wallmap.py
   and holds the grasper on. Timeout 140 steps, then the bomb is skipped for
   400 steps.
 * **Delivery:** geodesic field from stand-off points outside the observed
-  center; inside 100 px it drives the grasp side into the nearest observed
-  surface point; a detachment near the center counts as a delivery, elsewhere
-  as a drop that is re-queued. With no observed center the drone returns
-  towards its start position.
+  center; in B1 unobserved cells cost 10 instead of 3 in this field, so carries
+  prefer observed free space. Inside 100 px the drone drives the grasp side
+  into the nearest center surface point, taken from this step's detections
+  when the center is in view within 120 px (B1) and from the stored model
+  otherwise; surface points enter the model only while the heading standard
+  deviation is below 8 degrees (B1). A detachment near the center counts as a
+  delivery, elsewhere as a drop that is re-queued. With no observed center the
+  drone returns towards its start position. Known gap: the field and the aim
+  do not know which sides of the center are walled (section 7, item 1).
 * **Messages:** state, target, busy flag, bomb digest (up to 40), own claim,
   relayed claims, fleet positions, disposal-center box, disposal records
-  (pickup positions).
+  (pickup positions). B1 validates digest items (finite numbers of the
+  expected length) and skips items it has already applied.
+* **Shared exploration:** off for blue (`SHARE_COVERAGE` and `COMMIT_TARGETS`
+  false); offline it delayed completion on Map01 (EXPERIMENTS.md, 7.9).
 
-## 5. Red candidate R0.1 (`red.py`, `wallmap.py`)
+## 5. Red candidate R1 (`red.py`, `wallmap.py`; R0.1 differences noted)
+
+* **Exploration (R1):** team coverage summaries and target commitment are on
+  (`SHARE_COVERAGE`, `COMMIT_TARGETS`), with `COVERAGE_DROPS_FRONTIER` false:
+  coverage is a semantic-search notion, so blocks covered by teammates stop
+  being search targets, but unmapped space (frontier cells) stays a target
+  because red must map the walls there. Dropping frontier cells too lowered
+  the offline Map02 map score; keeping them did not (EXPERIMENTS.md, 7.9).
 
 * **Schedule** (T = step limit): explore until 0.25 T; place until 0.40 T
   (decisions staggered by 15 steps per identifier); rally towards the start
@@ -121,11 +142,19 @@ red only:  wallmap.py
 * **Rendering:** Gaussian smoothing (sigma 2.2 px), then pixels above an
   absolute threshold and above 0.33 of the local peak; specks below 12 px
   removed; the observed disposal-center box removed except for the border
-  band. **Border handling (owner review requested):** the arena border runs
-  along the map edge, so for each 40 px border segment in which evidence was
-  observed, the band from the edge to the observed inner face is drawn.
-  Unobserved segments are not drawn. This uses the known position of the
-  border, not unobserved fill.
+  band. **Border handling (conditionally approved by the owner):** the arena
+  border runs along the map edge, so for each 40 px border segment in which
+  evidence was observed, the band from the edge to the observed inner face is
+  drawn, in R1 only between the segment's outermost observed positions plus
+  12 px, so that a gap in the border is never filled beyond the evidence.
+  Unobserved segments are not drawn. Inputs: map dimensions, observed lidar
+  returns and the estimated pose; no supplied map's wall coordinates. Tests
+  with synthetic boundary gaps and interior walls near the edge are in
+  `devtools/tests/test_red_r1.py`; the ablation on real evidence (bands add
+  6.8-29.6 map points on Map01 with no penalized pixel) is in EXPERIMENTS.md,
+  section 7.7. Remaining ambiguity: whether every official map has a
+  complete border frame is not documented by the organizer; the clipping
+  limits the damage if one does not.
 * **Placement:** greedy marginal coverage on the current team map at 4 px
   resolution (border walls weigh 0.5, blast radius `round(0.12 * min(W, H))`),
   excluding walls already covered by placed or claimed bombs; candidates are
@@ -155,33 +184,29 @@ red only:  wallmap.py
 
 ## 7. Known defects and limitations (prioritized)
 
-1. **Heading drift while carrying (blue, confirmed).** The estimator predicts
-   rotation from the command, but a carrying drone turns by about 0.39 of it,
-   and the per-step deviations stay mostly below the odometer check. Real
-   rounds: heading error median 15-20 degrees and 95th percentile 47-57
-   degrees while carrying, against medians of 1.5-6.3 degrees in the other
-   states (round 10). Effects: wrong
-   thrust directions, slow and wandering carries, mis-oriented deliveries,
-   polluted disposal-center points. Proposed fix: use the odometer rotation
-   while carrying and raise the compass gain floor then. An offline what-if
-   with this change disposed 10/10 on Map01 for two seeds (current: 9 and 8);
-   it is not yet validated on the real simulator.
-2. **No sharing of searched areas (both roles).** Each drone tracks only its
-   own coverage, so drones re-search areas teammates covered; R0.1 on Map01
-   left the right-hand compartment unmapped in one of two seeds.
-3. **Optimistic planning through unknown space while carrying.** Routes over
-   unobserved cells flip once the wall is seen; at 3 px/step each flip costs
-   hundreds of steps.
-4. **Disposal-center model outliers.** Surface points recorded during large
-   pose errors persist; delivery then aims at free space. The final approach
-   should use live relative detections, as the grasp already does.
-5. **Exploration target churn.** Targets are re-chosen every 40 steps, which
-   produces wavy paths.
-6. **Compute margin.** About 50 steps/s on the server for blue; a full
-   7200-step round would take about 144 s of the 240 s limit, so a slower
-   evaluator could hit the wall-clock limit on long rounds.
-7. **Fixed red schedule.** Placement and submission times are fixed fractions
-   of the step limit; mapping quality on short rounds (Map01) varies strongly
-   between seeds.
-8. Return-area support is minimal (idle drones go to the last position where
+Resolved in Phase 2: heading drift while carrying (B1 estimator), no sharing
+of searched areas (red; blue keeps it off), exploration target churn (red),
+disposal-center model outliers (live aim and gated recording), optimistic
+carry routes (higher unknown cost). Open, in priority order:
+
+1. **Delivery to a partly walled disposal center (blue, confirmed on Map03).**
+   Stand-off goals are placed on every side of the observed center and the
+   final approach skips the line-of-sight test within 50 px, so a carrier on
+   a walled side pushes into the wall until the step limit (three of ten
+   bombs on Map03; EXPERIMENTS.md, 7.6). Also in B0.1. Direction: keep the
+   line-of-sight test at all distances, derive stand-off goals only from
+   center points observed from free space, and block a failed approach side
+   in the carry field.
+2. **Idle drones crowd the area next to the center.** They wait near the
+   start area, which lies 50-180 px from the center on the supplied maps;
+   this adds contacts and obstructs deliveries (Map03).
+3. **Bomb table duplicates (blue).** Records of moved or carried bombs can be
+   recreated from gossip: 100-111 records for 10 bombs in offline Map03 runs.
+   Digest de-duplication reduces it; the table is not yet consolidated.
+4. **Compute margin.** B1 runs 66-73 steps/s on the server; a 7200-step round
+   would take about 106 s of 240 s there. The evaluator's speed is unknown.
+5. **Red wall coverage varies** (32-83 across rounds) and was low on Map04
+   (32.1); placement uses the team map at placement time and fixed schedule
+   fractions.
+6. Return-area support is minimal (idle drones go to the last position where
    `is_inside_return_area` was true); the supplied maps have no return area.
