@@ -28,6 +28,8 @@ Every drone runs the same decentralised policy:
   detachment next to the center counts as a delivery, anywhere else as a
   drop that is re-queued. Surface points enter the stored model only while
   the heading estimate is trusted.
+* wait: idle drones wait at a reachable spot away from the center, so that
+  they do not block deliveries.
 
 Missing sensors, missing messages or an unknown disposal center degrade the
 behaviour (dead reckoning, local decisions, return towards the start area)
@@ -68,6 +70,8 @@ APPROACH_PATIENCE = 160    # steps near the center without progress before a re-
 PROGRESS_RANGE = 150.0     # distance to the center within which progress is watched
 PROGRESS_EPS = 5.0         # px of distance gain that count as progress
 PROGRESS_MOVE = 80.0       # a drone that moved this far is travelling, not stuck
+IDLE_DC_CLEARANCE = 130.0  # idle drones wait at least this far from the center
+IDLE_PERIOD = 100
 
 
 class Bomb:
@@ -154,6 +158,7 @@ class RescueBrain(BrainBase):
         self._relaxed = False      # every supported stand-off is penalized
         # Progress watch near the center: best distance, its step and position.
         self.progress: Optional[Tuple[float, int, float, float]] = None
+        self._idle_spot: Optional[Tuple[int, Tuple[float, float]]] = None
         self.diag.update({"grasps": 0, "disposed": 0, "drops": 0, "grasp_timeouts": 0,
                           "claims": 0, "yields": 0, "live_aims": 0, "witness_aims": 0,
                           "approach_failures": 0, "relaxed_sources": 0,
@@ -564,9 +569,43 @@ class RescueBrain(BrainBase):
         if spot is None:
             return Command()
         aim = (spot[0] + 45.0 * math.cos(2.4 * self.id), spot[1] + 45.0 * math.sin(2.4 * self.id))
+        if self.return_area is None:
+            aim = self._idle_aim(obs.step, spot, aim)
         target = self._path_target(obs, aim)
         f, l, _ = drive(self.est, target, view, cruise=4.0, carrying=False, others=others)
         return Command(forward=f, lateral=l)
+
+    def _idle_aim(self, now: int, spot: Tuple[float, float],
+                  aim: Tuple[float, float]) -> Tuple[float, float]:
+        """A waiting position that keeps clear of the disposal center.
+
+        The start area lies close to the center on the supplied maps, so
+        drones waiting there obstruct carriers. The chosen position is a
+        known free, reachable cell at least ``IDLE_DC_CLEARANCE`` from the
+        center, near the start area (cached for ``IDLE_PERIOD`` steps).
+        """
+        if not self.dc.known or self.dc.distance(*aim) >= IDLE_DC_CLEARANCE:
+            return aim
+        cached = self._idle_spot
+        if cached is not None and now - cached[0] < IDLE_PERIOD:
+            return cached[1]
+        field = self._field_from_me(now)
+        cost = self.planner.cost(False, now)
+        best, best_score = aim, math.inf
+        for radius in (60.0, 100.0, 140.0, 180.0, 220.0):
+            for k in range(12):
+                a = 2.4 * self.id + k * math.pi / 6.0
+                x, y = spot[0] + radius * math.cos(a), spot[1] + radius * math.sin(a)
+                if self.dc.distance(x, y) < IDLE_DC_CLEARANCE:
+                    continue
+                r, c = self.grid.to_cell(x, y)
+                if cost[r, c] <= 0 or not np.isfinite(field[r, c]):
+                    continue
+                score = field[r, c] * self.grid.cell + 0.5 * math.hypot(x - aim[0], y - aim[1])
+                if score < best_score:
+                    best, best_score = (x, y), score
+        self._idle_spot = (now, best)
+        return best
 
     def _dc_sources(self, now: int) -> List[Tuple[int, int]]:
         """Goal cells of the carry field: witnessed stand-offs, else map-checked radial ones."""
