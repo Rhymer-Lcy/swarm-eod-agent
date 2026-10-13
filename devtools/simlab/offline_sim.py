@@ -5,8 +5,9 @@ what was measured or read from the supplied simulator:
 
 * motion: the exact linear thrust/rotation model (``eod.params``), the
   simulator's thrust clipping, carrying with a third of the thrust gain and a
-  speed cap, contact with walls and the disposal center that stops motion
-  along the contact normal;
+  speed cap, the reduced rotation response while carrying (0.39 of the
+  command, the median measured in the grasp probe), contact with walls and
+  the disposal center that stops motion along the contact normal;
 * sensors: GPS and compass AR(1) noise (sigma 5 px / 4 deg, phi 0.98),
   odometer Gaussian noise (0.2 px, 8 deg, 1 deg), 181-ray lidar over walls,
   the disposal center, drones and bombs (sigma 2.5 px, 300 px range),
@@ -38,6 +39,7 @@ from swarm_rescue.solutions.eod.observation import Command, Observation, Semanti
 
 AR_PHI = 0.98
 HEALTH_COOLDOWN_STEPS = 150
+CARRY_ROTATION_RATIO = 0.39
 DRONE_BODY = 13.0
 SEMANTIC_RAYS = 35
 
@@ -252,8 +254,11 @@ class OfflineWorld:
                 d.vx *= (P.CARRY_SPEED + 0.1) / sp
                 d.vy *= (P.CARRY_SPEED + 0.1) / sp
         d.prev_x, d.prev_y, d.prev_heading = d.x, d.y, d.heading
-        d.heading = math.atan2(math.sin(d.heading + P.ROT_GAIN * r),
-                               math.cos(d.heading + P.ROT_GAIN * r))
+        # Measured in the grasp probe: with a bomb on the pivot joint the drone
+        # turns by only about 0.39 of the commanded rotation (median ratio).
+        rot_gain = P.ROT_GAIN * (CARRY_ROTATION_RATIO if d.carrying is not None else 1.0)
+        d.heading = math.atan2(math.sin(d.heading + rot_gain * r),
+                               math.cos(d.heading + rot_gain * r))
         if self._clear(nx, ny) < DRONE_BODY:
             # Contact: move as far as possible, then cancel the normal speed.
             lo, hi = 0.0, 1.0
