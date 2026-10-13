@@ -359,150 +359,194 @@ class DynamicsProbe(_ProbeBase):
 
 
 class GraspProbe(_ProbeBase):
-    """Rescue-mode probe: grasp, carry and dispose scripted per drone.
+    """Rescue-mode probe: grasp, carry and dispose, scripted per drone.
 
-    Bomb ``i`` of the bombs file is assigned to drone ``i``. Drones without a
-    bomb stay idle. Plans:
+    Use with ``layout_grasp_probe(fixture)``: bomb ``i`` (i = 0..3) lies
+    straight below drone ``i`` of the start grid. Drones 4..9 first move to
+    the right, out of the delivery corridors, and then hold. From step 80 the
+    test drones run, staggered by 40 steps:
 
-    * drone 0: frontal approach, then carry forward into the disposal center;
-    * drone 1: side approach (bomb on the left), then strafe into the center
-      with the bomb leading;
-    * drone 2: frontal approach, then reverse into the center (bomb trailing);
-    * drone 3: frontal approach, carry away from the center for 60 steps,
-      release, watch the bomb, then re-grasp and deliver it frontally;
-    * drone 4: push the bomb into the center without grasping.
+    * drone 0: frontal approach, then forward into the disposal center
+      (bomb leading);
+    * drone 1: approach with the left side, then strafe into the center with
+      the bomb leading on the left;
+    * drone 2: frontal approach, then reverse into the center (bomb
+      trailing);
+    * drone 3: frontal approach, carry away from the center for 60 steps at
+      full thrust, release, watch the bomb for 150 steps, re-grasp and
+      deliver frontally.
+
+    A drone still carrying 300 steps after starting delivery spins in place
+    while pushing for 40 steps (logged as ``spin``).
     """
+
+    START = 80
+    STAGGER = 40
 
     def __init__(self, identifier: Optional[int] = None, misc_data=None, **kwargs):
         super().__init__(identifier=identifier, misc_data=misc_data, **kwargs)
-        self._bomb_xy: Optional[np.ndarray] = None
-        self._dc_xy: Optional[np.ndarray] = None
-        self._carry_k = 0
-
-    def _assigned_bomb(self) -> Optional[np.ndarray]:
-        from swarm_rescue.simulation.elements.bomb import Bomb
-        bombs = [e for e in self._playground.elements if isinstance(e, Bomb)]
-        bombs.sort(key=lambda b: (round(b.path.get(0).position[0], 1),
-                                  round(b.path.get(0).position[1], 1)))
-        ident = int(self.identifier)
-        if ident >= len(bombs):
-            return None
-        self._bomb_entity = bombs[ident]
-        return np.array(bombs[ident].true_position())
+        self._bomb = None
+        self._dc = None
+        self._home = None
+        self._deliver_k = None
+        self._was_grasping = False
 
     def control(self):
         self._k += 1
+        k = self._k
         cmd = {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
-        if self._k == 1:
+        ident = int(self.identifier)
+        if k == 1:
             fixture = _fixture(self.size_area)
-            if fixture is not None:
-                dc = fixture["disposal_center"]
-                self._dc_xy = np.array([dc["x"], dc["y"]])
-        role = int(self.identifier)
-        if self._k > 5 and role <= 4 and self._dc_xy is not None:
-            bomb = self._assigned_bomb()
-            if bomb is not None:
-                getattr(self, f"_plan_{role}")(cmd, bomb)
-        if self._k % 3 == 0:
+            self._dc = fixture["disposal_center"]
+            self._home = np.array(self.true_position())
+            if ident <= 3:
+                self._bomb = self._find_bomb_below()
+        if ident >= 4:
+            target = np.array([-250.0 + 30.0 * (ident - 4), self._home[1]])
+            if k > 5:
+                self._goto(cmd, target, 0.0, speed=0.5)
+        elif self._bomb is not None and k >= self.START + self.STAGGER * ident:
+            getattr(self, f"_plan_{ident}")(cmd, k)
+        self._track()
+        if k % 3 == 0:
             self._log_sensors()
         self._log(cmd)
         return cmd
 
+    # -- truth helpers ---------------------------------------------------
+    def _find_bomb_below(self):
+        from swarm_rescue.simulation.elements.bomb import Bomb
+        pos = self.true_position()
+        best, best_d = None, 1e9
+        for element in self._playground.elements:
+            if isinstance(element, Bomb):
+                b = element.true_position()
+                d = abs(b[0] - pos[0]) + (0.0 if b[1] < pos[1] else 1e6)
+                if d < best_d:
+                    best, best_d = element, d
+        return best
+
+    def _bomb_xy(self) -> np.ndarray:
+        return np.array(self._bomb.true_position())
+
+    def _track(self) -> None:
+        grasping = bool(self.grasped_bombs())
+        if self._bomb is not None and not self._bomb.removed:
+            b = self._bomb_xy()
+            pos = self.true_position()
+            ang = self.true_angle()
+            rel = b - pos
+            body = (rel[0] * math.cos(ang) + rel[1] * math.sin(ang),
+                    -rel[0] * math.sin(ang) + rel[1] * math.cos(ang))
+            _LOG["events"].append({"step": int(self.elapsed_timestep),
+                                   "drone": int(self.identifier),
+                                   "event": "bomb_track",
+                                   "bx": float(b[0]), "by": float(b[1]),
+                                   "body_x": float(body[0]), "body_y": float(body[1]),
+                                   "grasped": grasping})
+        if grasping and not self._was_grasping:
+            self._event("grasped")
+        if self._was_grasping and not grasping:
+            self._event("grasp_lost", reward=float(self.reward))
+        self._was_grasping = grasping
+
     def _goto(self, cmd: dict, target: np.ndarray, heading: float,
               speed: float = 0.6, stop: float = 0.0) -> float:
-        """Holonomic truth-based approach: hold heading, translate to target."""
+        """Truth-based holonomic move: hold ``heading``, translate to target.
+
+        Uses the measured lateral convention: positive lateral thrust moves
+        the drone to its left (+90 degrees).
+        """
         pos = self.true_position()
         delta = target - pos
         dist = float(np.hypot(*delta))
         self._turn_to(cmd, heading, tol=0.02)
         if dist > stop:
-            world = delta / max(dist, 1e-6) * min(speed, 0.02 * (dist - stop) + 0.15)
+            mag = min(speed, 0.03 * (dist - stop) + 0.1)
+            world = delta / max(dist, 1e-6) * mag
             ang = self.true_angle()
-            # Body frame: forward along heading, lateral sign from the probe log.
-            cmd["forward"] = float(np.clip(world[0] * math.cos(ang) + world[1] * math.sin(ang), -1, 1))
-            cmd["lateral"] = float(np.clip(-world[0] * math.sin(ang) + world[1] * math.cos(ang), -1, 1))
+            cmd["forward"] = float(np.clip(world[0] * math.cos(ang)
+                                           + world[1] * math.sin(ang), -1, 1))
+            cmd["lateral"] = float(np.clip(-world[0] * math.sin(ang)
+                                           + world[1] * math.cos(ang), -1, 1))
         return dist
 
-    def _approach_and_grasp(self, cmd: dict, bomb: np.ndarray, side: float) -> bool:
-        """Face the bomb with the given side, approach and grasp."""
-        pos = self.true_position()
-        bearing = math.atan2(bomb[1] - pos[1], bomb[0] - pos[0])
-        heading = _wrap(bearing - side)
+    def _dc_entry(self) -> np.ndarray:
+        """Point inside the center straight above this drone's start column."""
+        return np.array([self._home[0], self._dc["y"]])
+
+    def _approach(self, cmd: dict, side: float) -> bool:
         if self.grasped_bombs():
             return True
+        b = self._bomb_xy()
+        pos = self.true_position()
+        bearing = math.atan2(b[1] - pos[1], b[0] - pos[0])
         cmd["grasper"] = 1
-        self._goto(cmd, bomb, heading, speed=0.35)
+        self._goto(cmd, b, _wrap(bearing - side), speed=0.35)
         return False
 
-    def _deliver(self, cmd: dict, side: float, speed: float = 0.5) -> None:
+    def _deliver(self, cmd: dict, side: float, k: int) -> None:
         cmd["grasper"] = 1
+        if self._deliver_k is None:
+            self._deliver_k = k
+            self._event("deliver_start", side=side)
+        entry = self._dc_entry()
         pos = self.true_position()
-        bearing = math.atan2(self._dc_xy[1] - pos[1], self._dc_xy[0] - pos[0])
-        self._goto(cmd, self._dc_xy, _wrap(bearing - side), speed=speed)
-
-    def _note_grasp(self, plan: str) -> None:
-        if self._phase == "start" and self.grasped_bombs():
-            self._phase = "carry"
-            self._phase_k = self._k
-            bomb = self._bomb_entity.true_position()
-            pos = self.true_position()
-            self._event("grasped", plan=plan, rel_x=float(bomb[0] - pos[0]),
-                        rel_y=float(bomb[1] - pos[1]), heading=float(self.true_angle()))
-
-    def _plan_0(self, cmd: dict, bomb: np.ndarray) -> None:
-        if not self._approach_and_grasp(cmd, bomb, 0.0):
+        bearing = math.atan2(entry[1] - pos[1], entry[0] - pos[0])
+        t = k - self._deliver_k
+        if 300 <= t < 340:
+            if t == 300:
+                self._event("spin")
+            cmd["rotation"] = 1.0
+            cmd["forward"] = 0.4
             return
-        self._note_grasp("frontal")
-        self._deliver(cmd, 0.0)
+        self._goto(cmd, entry, _wrap(bearing - side), speed=0.6)
 
-    def _plan_1(self, cmd: dict, bomb: np.ndarray) -> None:
-        if not self._approach_and_grasp(cmd, bomb, math.pi / 2):
+    # -- plans -------------------------------------------------------------
+    def _plan_0(self, cmd: dict, k: int) -> None:
+        if self._deliver_k is not None or self._approach(cmd, 0.0):
+            self._deliver(cmd, 0.0, k)
+
+    def _plan_1(self, cmd: dict, k: int) -> None:
+        if self._deliver_k is not None or self._approach(cmd, math.pi / 2):
+            self._deliver(cmd, math.pi / 2, k)
+
+    def _plan_2(self, cmd: dict, k: int) -> None:
+        if self._deliver_k is not None or self._approach(cmd, 0.0):
+            self._deliver(cmd, math.pi, k)
+
+    def _plan_3(self, cmd: dict, k: int) -> None:
+        if self._phase == "start":
+            if self._approach(cmd, 0.0):
+                self._phase = "carry_away"
+                self._phase_k = k
             return
-        self._note_grasp("left side")
-        self._deliver(cmd, math.pi / 2)
-
-    def _plan_2(self, cmd: dict, bomb: np.ndarray) -> None:
-        if not self._approach_and_grasp(cmd, bomb, 0.0):
-            return
-        self._note_grasp("frontal, reverse delivery")
-        self._deliver(cmd, math.pi)
-
-    def _plan_3(self, cmd: dict, bomb: np.ndarray) -> None:
-        if self._phase in ("start", "carry"):
-            if not self._approach_and_grasp(cmd, bomb, 0.0):
-                return
-            self._note_grasp("frontal, carry away")
-            t = self._k - self._phase_k
+        if self._phase == "carry_away":
             cmd["grasper"] = 1
-            if t < 60:
-                pos = self.true_position()
-                away = math.atan2(pos[1] - self._dc_xy[1], pos[0] - self._dc_xy[0])
-                self._goto(cmd, pos + 200 * np.array([math.cos(away), math.sin(away)]),
-                           away, speed=1.0)
+            if k - self._phase_k < 60:
+                ang = self.true_angle()
+                # Full thrust straight down (away from the center), any heading.
+                cmd["forward"] = float(math.cos(-math.pi / 2 - ang))
+                cmd["lateral"] = float(math.sin(-math.pi / 2 - ang))
             else:
                 self._phase = "released"
-                self._phase_k = self._k
+                self._phase_k = k
                 self._event("release")
             return
         if self._phase == "released":
-            cmd["grasper"] = 0
-            if self._k - self._phase_k > 120:
+            if k - self._phase_k > 150:
                 self._phase = "regrasp"
             return
-        if not self._approach_and_grasp(cmd, bomb, 0.0):
-            return
-        self._deliver(cmd, 0.0)
+        if self._deliver_k is not None or self._approach(cmd, 0.0):
+            self._deliver(cmd, 0.0, k)
 
-    def _plan_4(self, cmd: dict, bomb: np.ndarray) -> None:
-        """Push without grasping: stand behind the bomb and drive through it."""
-        pos = self.true_position()
-        to_dc = self._dc_xy - bomb
-        unit = to_dc / max(float(np.hypot(*to_dc)), 1e-6)
-        behind = bomb - 30.0 * unit
-        heading = math.atan2(unit[1], unit[0])
-        if self._phase == "start":
-            if self._goto(cmd, behind, heading, speed=0.4) < 6.0:
-                self._phase = "push"
-                self._event("push_start")
-            return
-        self._goto(cmd, bomb + 40.0 * unit, heading, speed=0.4)
+
+def layout_grasp_probe(fixture: dict) -> dict:
+    """Bombs straight below the first four start positions (78 px down)."""
+    starts = fixture["starts"]
+    bombs = [{"x": float(starts[i][0]), "y": float(starts[i][1] - 78.0), "theta": 0.0}
+             for i in range(4)]
+    return {"map_name": fixture["map"], "zones_config": [], "bombs": bombs,
+            "generator": "devtools.simlab.probe.layout_grasp_probe "
+                         "(synthetic probe layout)"}
