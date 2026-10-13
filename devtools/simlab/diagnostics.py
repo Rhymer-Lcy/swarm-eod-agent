@@ -40,6 +40,8 @@ class TruthSink:
         self._reward_total: Dict[int, float] = {}
         self.agent_reports: Dict[int, Any] = {}
         self.submitted_step: Optional[int] = None
+        self.brain_rows: List[tuple] = []
+        self._state_codes: Dict[str, int] = {}
 
     def record(self, drone: Any) -> None:
         step = int(drone.elapsed_timestep) + 1
@@ -58,6 +60,17 @@ class TruthSink:
         if (getattr(drone, "_exploration_map_submission", None) is not None
                 and self.submitted_step is None):
             self.submitted_step = step
+        brain = getattr(drone, "_brain", None)
+        if brain is not None and getattr(brain, "est", None) is not None:
+            # Read-only snapshot of the agent's internal state for offline
+            # analysis (what it believed and intended at this step).
+            est = brain.est
+            target = getattr(brain, "target", None) or (math.nan, math.nan)
+            label = str(getattr(brain, "state", ""))
+            phase = str(getattr(brain, "phase", ""))
+            code = self._state_codes.setdefault(f"{phase}/{label}", len(self._state_codes))
+            self.brain_rows.append((step, ident, float(est.x), float(est.y), float(est.heading),
+                                    float(target[0]), float(target[1]), code))
         report = getattr(drone, "diagnostics_report", None)
         if callable(report):
             try:
@@ -89,10 +102,15 @@ class TruthSink:
             -1, len(self.DRONE_FIELDS))
         bombs = np.array(self.bomb_rows, dtype=np.float64).reshape(
             -1, len(self.BOMB_FIELDS))
+        brain = np.array(self.brain_rows, dtype=np.float64).reshape(-1, 8)
         np.savez_compressed(directory / "truth.npz", drones=drones,
-                            bombs=bombs,
+                            bombs=bombs, brain=brain,
                             drone_fields=np.array(self.DRONE_FIELDS),
-                            bomb_fields=np.array(self.BOMB_FIELDS))
+                            bomb_fields=np.array(self.BOMB_FIELDS),
+                            brain_fields=np.array(("step", "drone", "est_x", "est_y",
+                                                   "est_heading", "target_x", "target_y",
+                                                   "state_code")),
+                            state_codes=np.array(json.dumps(self._state_codes)))
         with (directory / "agent_reports.json").open("w",
                                                       encoding="utf-8") as f:
             json.dump(self.agent_reports, f, indent=1, sort_keys=True,
