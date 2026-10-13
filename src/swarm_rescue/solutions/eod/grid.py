@@ -40,6 +40,7 @@ class OccupancyGrid:
         self.logodds = np.zeros((self.ny, self.nx), dtype=np.float32)
         self.observed = np.zeros((self.ny, self.nx), dtype=bool)
         self.version = 0
+        self._occ_cache: Optional[Tuple[int, np.ndarray]] = None
         steps = np.arange(1, int(P.LIDAR_RANGE / (self.cell * 0.5)) + 1)
         self._samples = steps * (self.cell * 0.5)
 
@@ -79,17 +80,24 @@ class OccupancyGrid:
         mask = t < free_len[:, None]
         px = x + t * np.cos(a)[:, None]
         py = y + t * np.sin(a)[:, None]
-        free_cells = self._cells(px[mask], py[mask])
-        free_cells = np.unique(free_cells[free_cells >= 0])
+        # Boolean scratch masks give each touched cell exactly once (the same
+        # sorted unique cells as np.unique, without sorting).
+        n_cells = self.nx * self.ny
+        free_mask = np.zeros(n_cells, dtype=bool)
+        cells = self._cells(px[mask], py[mask])
+        free_mask[cells[cells >= 0]] = True
+        free_cells = np.flatnonzero(free_mask)
         flat = self.logodds.reshape(-1)
         obs = self.observed.reshape(-1)
         flat[free_cells] += P.LOGODDS_FREE
         obs[free_cells] = True
         hx = x + r[is_hit] * np.cos(a[is_hit])
         hy = y + r[is_hit] * np.sin(a[is_hit])
-        hit_cells = self._cells(hx, hy)
-        hit_cells = np.unique(hit_cells[hit_cells >= 0])
-        flat[hit_cells] += P.LOGODDS_HIT - P.LOGODDS_FREE * np.isin(hit_cells, free_cells)
+        hit_mask = np.zeros(n_cells, dtype=bool)
+        cells = self._cells(hx, hy)
+        hit_mask[cells[cells >= 0]] = True
+        hit_cells = np.flatnonzero(hit_mask)
+        flat[hit_cells] += P.LOGODDS_HIT - P.LOGODDS_FREE * free_mask[hit_cells]
         obs[hit_cells] = True
         np.clip(self.logodds, P.LOGODDS_MIN, P.LOGODDS_MAX, out=self.logodds)
         self.version += 1
@@ -105,7 +113,17 @@ class OccupancyGrid:
 
     # -- classification ------------------------------------------------------
     def occupied(self) -> np.ndarray:
-        return self.logodds > P.OCCUPIED_THRESHOLD
+        """Occupied cells (read-only, cached per grid ``version``).
+
+        Code that writes ``logodds`` directly must increment ``version``.
+        """
+        cache = self._occ_cache
+        if cache is None or cache[0] != self.version:
+            occ = self.logodds > P.OCCUPIED_THRESHOLD
+            occ.flags.writeable = False
+            cache = (self.version, occ)
+            self._occ_cache = cache
+        return cache[1]
 
     def free(self) -> np.ndarray:
         return self.logodds < P.FREE_THRESHOLD

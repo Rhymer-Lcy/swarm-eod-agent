@@ -130,18 +130,23 @@ def teammate_repulsion(x: float, y: float, others: Iterable[Tuple[float, float]]
 
 def lookahead_point(path: Sequence[Tuple[float, float]], x: float, y: float,
                     lookahead: float, visible) -> Tuple[float, float]:
-    """Farthest path point within ``lookahead`` that ``visible`` accepts."""
+    """Farthest path point within ``lookahead`` that ``visible`` accepts.
+
+    The candidates are the points from the one nearest to the drone up to the
+    first point beyond ``lookahead``; they are tested from the far end, so
+    usually a single visibility test is needed.
+    """
     if not path:
         return x, y
     nearest = min(range(len(path)), key=lambda i: (path[i][0] - x) ** 2 + (path[i][1] - y) ** 2)
-    best = path[nearest]
-    for i in range(nearest, len(path)):
+    end = nearest
+    while end < len(path) and math.hypot(path[end][0] - x, path[end][1] - y) <= lookahead:
+        end += 1
+    for i in range(end - 1, nearest - 1, -1):
         px, py = path[i]
-        if math.hypot(px - x, py - y) > lookahead:
-            break
         if visible(px, py):
-            best = (px, py)
-    return best
+            return px, py
+    return path[nearest]
 
 
 class StuckMonitor:

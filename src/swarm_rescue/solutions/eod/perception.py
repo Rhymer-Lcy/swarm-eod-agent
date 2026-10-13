@@ -82,17 +82,18 @@ def entity_mask(semantic: Optional[Sequence[SemanticHit]], lidar: np.ndarray,
 
     ``kinds`` restricts the match to some entity types (all when ``None``).
     """
-    mask = np.zeros(len(lidar), dtype=bool)
     if not semantic:
-        return mask
-    for h in semantic:
-        if kinds is not None and h.kind not in kinds:
-            continue
-        surface = h.distance - P.SEMANTIC_BIAS
-        diff = np.abs((angles - h.angle + math.pi) % (2 * math.pi) - math.pi)
-        width = math.radians(7.0) + (0.12 if h.kind == "DISPOSAL_CENTER" else 0.0)
-        mask |= (diff < width) & (np.abs(lidar - surface) < 14.0)
-    return mask
+        return np.zeros(len(lidar), dtype=bool)
+    hits = [h for h in semantic if kinds is None or h.kind in kinds]
+    if not hits:
+        return np.zeros(len(lidar), dtype=bool)
+    # All hits at once: one (hits x rays) comparison instead of a loop.
+    hit_angle = np.array([h.angle for h in hits])[:, None]
+    surface = np.array([h.distance - P.SEMANTIC_BIAS for h in hits])[:, None]
+    width = np.array([math.radians(7.0) + (0.12 if h.kind == "DISPOSAL_CENTER" else 0.0)
+                      for h in hits])[:, None]
+    diff = np.abs((angles[None, :] - hit_angle + math.pi) % (2 * math.pi) - math.pi)
+    return np.any((diff < width) & (np.abs(lidar[None, :] - surface) < 14.0), axis=0)
 
 
 def near_points_mask(ex: np.ndarray, ey: np.ndarray,
@@ -107,11 +108,13 @@ class DisposalCenterModel:
     """Surface points of the disposal center and a robust bounding box."""
 
     MAX_POINTS = 600
+    REFRESH_POINTS = 12       # the box is recomputed after this many new points
 
     def __init__(self) -> None:
         self.points: List[Tuple[float, float]] = []
         self.box: Optional[Tuple[float, float, float, float]] = None
         self._dirty = False
+        self._pending = 0
         self.shared_box: Optional[Tuple[float, float, float, float]] = None
 
     def add(self, px: float, py: float) -> None:
@@ -119,6 +122,7 @@ class DisposalCenterModel:
             self.points[len(self.points) // 2:] = self.points[len(self.points) // 2 + 1:]
         self.points.append((px, py))
         self._dirty = True
+        self._pending += 1
 
     def observe(self, x: float, y: float, heading: float,
                 semantic: Optional[Sequence[SemanticHit]]) -> None:
@@ -131,12 +135,16 @@ class DisposalCenterModel:
                 self.add(x + d * math.cos(a), y + d * math.sin(a))
 
     def bbox(self) -> Optional[Tuple[float, float, float, float]]:
-        if self._dirty and len(self.points) >= 4:
+        # The robust box changes little with each new point: it is computed
+        # as soon as four points exist and then refreshed in batches.
+        refresh = self.box is None or self._pending >= self.REFRESH_POINTS
+        if self._dirty and len(self.points) >= 4 and refresh:
             arr = np.array(self.points)
             lo = np.percentile(arr, 2, axis=0)
             hi = np.percentile(arr, 98, axis=0)
             self.box = (float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1]))
             self._dirty = False
+            self._pending = 0
         if self.box is None:
             return self.shared_box
         return self.box
