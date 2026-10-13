@@ -15,8 +15,12 @@ local peak, which yields a band around the evidence ridge whose width
 follows the observed spread. The arena border is the one wall whose position
 is known up to its thickness: the border runs along the map edge, so a
 border segment for which evidence was observed is drawn from the edge to the
-observed inner face. Unobserved border segments are not drawn. The disposal
-center is removed from the result; it is not a wall.
+observed inner face, and only between its outermost observed positions plus
+``SPAN_MARGIN``. Unobserved border segments are not drawn, so a gap in the
+border is never filled more than ``SPAN_MARGIN`` px beyond observed returns.
+Inputs are the map dimensions, observed lidar returns and the estimated
+pose; no wall coordinates of any supplied map are used. The disposal center
+is removed from the result; it is not a wall.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ import numpy as np
 MAP_RANGE = 170.0
 INSIDE_OFFSET = 1.5
 SEGMENT = 40           # border segment length in px
+SPAN_MARGIN = 12       # px drawn beyond the outermost evidence of a segment
 
 
 class WallEvidence:
@@ -111,13 +116,23 @@ def _border_bands(evidence: np.ndarray, out: np.ndarray, min_hits: float = 3.0,
         for start in range(0, length, SEGMENT):
             end = min(start + SEGMENT, length)
             if strip[:, start:end].sum() >= min_hits:
-                draw(start, end, thickness)
+                # Draw only between the first and last observed position of
+                # the segment (plus a margin), so that a gap in the border is
+                # never filled more than SPAN_MARGIN px beyond the evidence.
+                seen = np.flatnonzero(strip[:, start:end].sum(axis=0) > 0)
+                lo = max(start, start + int(seen[0]) - SPAN_MARGIN)
+                hi = min(end, start + int(seen[-1]) + 1 + SPAN_MARGIN)
+                draw(lo, hi, thickness)
 
 
 def render(evidence: np.ndarray, *, dc_box: Optional[Tuple[float, float, float, float]] = None,
            sigma: float = 2.2, abs_threshold: float = 0.55, rel_threshold: float = 0.33,
-           border_depth: int = 16) -> np.ndarray:
-    """Binary wall map (uint8, H x W) from summed evidence counts."""
+           border_depth: int = 16, border: bool = True) -> np.ndarray:
+    """Binary wall map (uint8, H x W) from summed evidence counts.
+
+    ``border=False`` disables the border-band rendering (mapping ablation);
+    the agents always use the default.
+    """
     h, w = evidence.shape
     smooth = cv2.GaussianBlur(evidence.astype(np.float32), (0, 0), sigma)
     peak = cv2.dilate(smooth, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)))
@@ -125,7 +140,8 @@ def render(evidence: np.ndarray, *, dc_box: Optional[Tuple[float, float, float, 
     out = walls.astype(np.uint8)
     # Observed border segments are added at their exact position; interior
     # walls that abut the border keep their own evidence band.
-    _border_bands(evidence, out, depth=border_depth)
+    if border:
+        _border_bands(evidence, out, depth=border_depth)
     # Remove small isolated specks (isolated false returns).
     n, labels, stats, _ = cv2.connectedComponentsWithStats(out, connectivity=8)
     small = stats[:, cv2.CC_STAT_AREA] < 12
