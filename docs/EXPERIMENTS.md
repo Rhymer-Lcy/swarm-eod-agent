@@ -145,9 +145,12 @@ large for red on Map01.
    (P3: median ratio 0.39 of the command; deviations mostly below the 3.5
    degree odometer check). Consequences seen in the traces: a 1400-step carry
    in round 10, deliveries aimed at disposal-center points 55-93 px off.
-4. **No sharing of searched areas (open).** In round 9 all five red drones
-   spent the first 500 steps in the left compartment (each covered about
-   2700-3000 px of path) while the right compartment stayed unmapped.
+4. **No sharing of searched areas (open).** In round 9 the five red drones
+   flew about 2700-3000 px each in the first 500 steps, mostly over the same
+   left and middle parts of the map: three never passed x = 100 and only one
+   crossed briefly into the right compartment (x > 288, up to x = 340). The
+   right compartment and the right border were missing from the submitted
+   map.
 5. **Optimistic routes through unknown cells while carrying (open).** Round
    10, drone 9: the planned route alternated between the two ends of a
    partition as the wall was observed.
