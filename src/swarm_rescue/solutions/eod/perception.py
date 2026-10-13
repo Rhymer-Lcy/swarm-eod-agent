@@ -104,6 +104,24 @@ def near_points_mask(ex: np.ndarray, ey: np.ndarray,
     return mask
 
 
+def live_surface_points(x: float, y: float, heading: float,
+                        semantic: Optional[Sequence[SemanticHit]]) -> List[Tuple[float, float]]:
+    """Disposal-center surface points detected in this step (world frame).
+
+    Built from the current relative detections, so they carry only this
+    step's pose error, never errors accumulated in the stored model.
+    """
+    if not semantic:
+        return []
+    out = []
+    for h in semantic:
+        if h.kind == "DISPOSAL_CENTER":
+            d = h.distance - P.SEMANTIC_BIAS + 2.0
+            a = heading + h.angle
+            out.append((x + d * math.cos(a), y + d * math.sin(a)))
+    return out
+
+
 class DisposalCenterModel:
     """Surface points of the disposal center and a robust bounding box."""
 

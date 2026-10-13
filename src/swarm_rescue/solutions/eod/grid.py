@@ -16,7 +16,7 @@ negative (impassable) on inflated obstacles.
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -29,6 +29,7 @@ except Exception:  # pragma: no cover - depends on the evaluator image
     _MCP = None
 
 Cell = Tuple[int, int]
+UNKNOWN_COST = 3.0         # default per-cell cost of unobserved cells
 
 
 class OccupancyGrid:
@@ -175,14 +176,16 @@ class Planner:
         r = int(math.ceil(P.INFLATE_RADIUS / grid.cell))
         self._kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
         self._near = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 5, 2 * r + 5))
-        self._cost_cache: Optional[Tuple[int, bool, np.ndarray]] = None
+        self._cost_cache: Dict[tuple, np.ndarray] = {}
         self.extra_blocked: List[Tuple[float, float, float, int]] = []  # x, y, radius, until_step
 
-    def cost(self, allow_unknown: bool, step: int = 0) -> np.ndarray:
+    def cost(self, allow_unknown: bool, step: int = 0,
+             unknown_cost: float = UNKNOWN_COST) -> np.ndarray:
         g = self.grid
-        key = (g.version, allow_unknown, step // 20)
-        if self._cost_cache is not None and self._cost_cache[0] == key:
-            return self._cost_cache[2]
+        key = (g.version, allow_unknown, step // 20, unknown_cost)
+        cached = self._cost_cache.get(key)
+        if cached is not None:
+            return cached
         occ = g.occupied().astype(np.uint8)
         for bx, by, rad, until in self.extra_blocked:
             if until >= step:
@@ -196,17 +199,23 @@ class Planner:
         cost[near] = 2.5
         unknown = g.unknown()
         if allow_unknown:
-            cost[unknown] = np.maximum(cost[unknown], 3.0)
+            cost[unknown] = np.maximum(cost[unknown], unknown_cost)
         else:
             cost[unknown] = -1.0
         cost[inflated] = -1.0
-        self._cost_cache = (key, allow_unknown, cost)
+        # A few variants (allow_unknown, unknown_cost) of the current grid.
+        self._cost_cache = {k: v for k, v in self._cost_cache.items() if k[:3] == key[:3]}
+        self._cost_cache[key] = cost
         return cost
 
     def field(self, sources: Sequence[Cell], allow_unknown: bool,
-              step: int = 0) -> np.ndarray:
-        """Geodesic cost-to-go from the nearest source; inf where unreachable."""
-        cost = self.cost(allow_unknown, step).copy()
+              step: int = 0, unknown_cost: float = UNKNOWN_COST) -> np.ndarray:
+        """Geodesic cost-to-go from the nearest source; inf where unreachable.
+
+        ``unknown_cost`` is the per-cell cost of unobserved cells when they
+        are allowed (free cells cost 1, cells near obstacles 2.5).
+        """
+        cost = self.cost(allow_unknown, step, unknown_cost).copy()
         sources = [s for s in sources]
         if not sources:
             return np.full(cost.shape, np.inf)

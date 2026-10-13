@@ -1,4 +1,4 @@
-"""Blue (rescue) brain, candidate B0.
+"""Blue (rescue) brain, candidate B1 (B0 and B0.1 in Phase 1).
 
 Every drone runs the same decentralised policy:
 
@@ -14,10 +14,15 @@ Every drone runs the same decentralised policy:
 * fetch and grasp: travel along the geodesic path; once the bomb is in view,
   steer on the live relative detection (immune to the slowly varying GPS
   error), face it and hold the grasper on until it attaches;
-* carry and deliver: follow the geodesic field to the disposal center and
-  drive the side on which the bomb was grasped into the nearest observed
-  surface point of the center; a detachment next to the center counts as a
-  delivery, anywhere else as a drop that is re-queued.
+* carry and deliver: follow the geodesic field to the disposal center, in
+  which unobserved cells cost more than for unloaded travel (a carrying
+  drone is slow, so a route that flips when a wall appears is expensive),
+  and drive the side on which the bomb was grasped into the nearest surface
+  point of the center, taken from this step's detections when the center is
+  in view and from the stored model otherwise; a detachment next to the
+  center counts as a delivery, anywhere else as a drop that is re-queued.
+  Surface points enter the stored model only while the heading estimate is
+  trusted.
 
 Missing sensors, missing messages or an unknown disposal center degrade the
 behaviour (dead reckoning, local decisions, return towards the start area)
@@ -37,7 +42,7 @@ from .comms import make_message, numeric_tuple, valid_messages
 from .geometry import wrap
 from .motion import LocalView, drive, lookahead_point, rotation_toward
 from .observation import Command, Observation
-from .perception import BombDetection, bomb_detections, entity_mask
+from .perception import BombDetection, bomb_detections, entity_mask, live_surface_points
 
 BOMB_MERGE = 35.0
 APPROACH_RANGE = 140.0
@@ -49,6 +54,9 @@ DELIVER_RANGE = 100.0
 DELIVER_TIMEOUT = 160
 FLEET_MAX_AGE = 200
 DIGEST_MEMORY = 4096      # remembered digest items before the set is reset
+DC_RECORD_HEADING_SIGMA = math.radians(8.0)
+CARRY_UNKNOWN_COST = 10.0  # carry routes prefer observed free space (default 3)
+LIVE_AIM_RANGE = 120.0
 
 
 class Bomb:
@@ -130,10 +138,11 @@ class RescueBrain(BrainBase):
         self.disposals: List[Tuple[float, float, int]] = []
         self.detections: List[BombDetection] = []
         self._digest_seen: set = set()
+        self.dc_live: List[Tuple[float, float]] = []
         self._dc_field: Optional[np.ndarray] = None
         self._dc_field_step = -10_000
         self.diag.update({"grasps": 0, "disposed": 0, "drops": 0, "grasp_timeouts": 0,
-                          "deliver_retries": 0, "claims": 0, "yields": 0})
+                          "deliver_retries": 0, "claims": 0, "yields": 0, "live_aims": 0})
 
     # ------------------------------------------------------------------ API
     def step(self, obs: Observation) -> Command:
@@ -221,7 +230,11 @@ class RescueBrain(BrainBase):
     # ------------------------------------------------------------ perception
     def _perceive(self, obs: Observation) -> None:
         est = self.est
-        self.dc.observe(est.x, est.y, est.heading, obs.semantic)
+        # Surface points recorded during a large heading error would persist
+        # as outliers of the center model; record only with a trusted heading.
+        if est.heading_sigma < DC_RECORD_HEADING_SIGMA:
+            self.dc.observe(est.x, est.y, est.heading, obs.semantic)
+        self.dc_live = live_surface_points(est.x, est.y, est.heading, obs.semantic)
         self.detections = []
         if obs.semantic is not None:
             self.detections = bomb_detections(est.x, est.y, est.heading, obs.semantic,
@@ -449,6 +462,13 @@ class RescueBrain(BrainBase):
             self.deliver_aim = self._choose_aim()
             self.deliver_start = obs.step
         aim = self.deliver_aim
+        if self.dc_live:
+            # Final approach on this step's detections of the center, which
+            # are immune to errors stored in the center model.
+            live = min(self.dc_live, key=lambda p: (p[0] - est.x) ** 2 + (p[1] - est.y) ** 2)
+            if math.hypot(live[0] - est.x, live[1] - est.y) < LIVE_AIM_RANGE:
+                aim = live
+                self.diag["live_aims"] += 1
         if aim is None:
             return None
         if math.hypot(aim[0] - est.x, aim[1] - est.y) > 50.0 and \
@@ -514,7 +534,8 @@ class RescueBrain(BrainBase):
                     dx, dy = px - cx, py - cy
                     norm = math.hypot(dx, dy) or 1.0
                     cells.append(self.grid.to_cell(px + 32.0 * dx / norm, py + 32.0 * dy / norm))
-            self._dc_field = self.planner.field(sorted(set(cells)), allow_unknown=True, step=now)
+            self._dc_field = self.planner.field(sorted(set(cells)), allow_unknown=True, step=now,
+                                               unknown_cost=CARRY_UNKNOWN_COST)
             self._dc_field_step = now
         cells = self.planner.descend(self._dc_field, self.grid.to_cell(est.x, est.y), max_len=12)
         if len(cells) >= 2:
