@@ -141,6 +141,20 @@ def resolve_agent(spec: str):
     return (lambda _mode: cls), spec, module
 
 
+def run_mode(args: argparse.Namespace) -> str:
+    """How the agent was attached to the launcher in this round.
+
+    ``native``: the official entry point exactly as the launcher imports it,
+    competition mode on, no wrapper and no selector replacement.
+    ``instrumented``: the agent class wrapped by the evaluation-only truth
+    logger. ``harness``: no truth log, but the class was selected by the
+    harness (comparators, probes, or the official class without --native).
+    """
+    if args.native:
+        return "native"
+    return "harness" if args.no_truth_log else "instrumented"
+
+
 def classify_termination(mode: str, result: tuple, max_steps: int) -> str:
     (_, _, elapsed_timestep, _, _, disposed, _, _, walltime_hit, crashed,
      _, n_bombs, _, _, _) = result
@@ -185,6 +199,7 @@ def run_round(args: argparse.Namespace) -> int:
         "map_source_sha256": _sha256(map_source),
         "agent": args.agent, "competition_mode": not args.no_competition,
         "seed": args.seed, "truth_log": not args.no_truth_log,
+        "run_mode": run_mode(args),
         "git_head": _git("rev-parse", "HEAD"),
         "git_dirty": bool(_git("status", "--porcelain")),
         "baseline_tag": _git("rev-parse", "baseline-supplied-5.1.3^{commit}"),
@@ -205,15 +220,21 @@ def run_round(args: argparse.Namespace) -> int:
 
     selector, agent_desc, agent_module = resolve_agent(args.agent)
     sink = None if args.no_truth_log else TruthSink()
-    if sink is not None:
-        inner = selector
-        cache: Dict[str, type] = {}
+    if args.native:
+        # The launcher's own reference to the entry point is used untouched.
+        from swarm_rescue.solutions import my_drone_eval
+        if launcher_module.drone_class_for_mode is not my_drone_eval.drone_class_for_mode:
+            raise SystemExit("native mode: the launcher does not reference the entry point")
+    else:
+        if sink is not None:
+            inner = selector
+            cache: Dict[str, type] = {}
 
-        def selector(mode: str):  # noqa: F811 - deliberate wrapping
-            if mode not in cache:
-                cache[mode] = with_truth_log(inner(mode), sink)
-            return cache[mode]
-    launcher_module.drone_class_for_mode = selector
+            def selector(mode: str):  # noqa: F811 - deliberate wrapping
+                if mode not in cache:
+                    cache[mode] = with_truth_log(inner(mode), sink)
+                return cache[mode]
+        launcher_module.drone_class_for_mode = selector
 
     stdout_path = run_dir / "stdout.log"
     started = time.perf_counter()
@@ -332,9 +353,10 @@ class _Tee(io.TextIOBase):
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--label", required=True, help="short run label (no spaces)")
-    p.add_argument("--phase", default="phase1", help="budget bucket")
-    p.add_argument("--budget", type=int, default=16,
-                   help="maximum rounds started in this phase (default 16)")
+    p.add_argument("--phase", default="phase2", help="budget bucket")
+    p.add_argument("--budget", type=int, default=30,
+                   help="maximum rounds started in this phase (default 30, the "
+                        "Phase 2 authorization)")
     p.add_argument("--map", required=True, choices=[f"Map0{i}" for i in range(1, 6)])
     p.add_argument("--mode", required=True, choices=["rescue", "place"])
     p.add_argument("--drones", type=int, default=10)
@@ -345,6 +367,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-competition", action="store_true",
                    help="run without the ground-truth guard (probes only)")
     p.add_argument("--no-truth-log", action="store_true")
+    p.add_argument("--native", action="store_true",
+                   help="native competition-mode round: official entry point, "
+                        "no truth log, no wrapper, no selector replacement")
     p.add_argument("--runs-root", default=str(DEFAULT_RUNS))
     p.add_argument("--host-note", default="", help="free text for the ledger")
     return p
@@ -352,6 +377,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if args.native:
+        if args.agent != "official" or args.no_competition:
+            print("--native requires --agent official and competition mode", file=sys.stderr)
+            return 2
+        args.no_truth_log = True
     if args.mode == "place" and args.bombs_per_drone is None:
         args.bombs_per_drone = 2
     if args.mode == "rescue" and not args.bombs_file:
