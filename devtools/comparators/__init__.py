@@ -12,6 +12,8 @@ Git history. A comparator is selected in the runner with
 
 * ``p1_ddc6897``: B0.1 (blue) and R0.1 (red), the Phase 1 candidates at
   ``ddc6897``.
+* ``p2_540054b``: B1 (blue) and R1 (red), the Phase 2 candidates at
+  ``540054b``.
 
 Nothing under ``solutions/`` may import this package.
 """

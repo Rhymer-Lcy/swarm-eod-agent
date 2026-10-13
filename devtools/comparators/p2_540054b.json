@@ -1,0 +1,26 @@
+{
+ "agents": {
+  "place": "R1",
+  "rescue": "B1"
+ },
+ "files_sha256": {
+  "__init__.py": "0656e0113e927f3a028def02d7ec44d1b2ad76754255076636217294584add7a",
+  "base.py": "cbc45e34167ae19f675cb52f88e9efa94d56e3b4647d73c7a5dd76dc5e24772c",
+  "blue.py": "7608475ba59fc6e5ae8e3fe23aa265b4c0b7b3acbd171c2c4852586b139abf5d",
+  "comms.py": "de919bb087b2f25f8a1aa4da16358199f94021240aeb66f7122370cfea9cdc0c",
+  "coverage.py": "8bf36139c0cef51bcb86cef72d17251f49a694021e14fd36a5b7dff2360d52ff",
+  "estimator.py": "c0644aea55a132e405a84d52639d1a032badb7f605b7ffdfd39e36bf99f3fe26",
+  "geometry.py": "674baf0abd9c5de1fc17c84d7c71d86acfb6e9da3aaaf10d6cbad95d5fc5682c",
+  "grid.py": "57949a8b4a8d62886d1cb5fe77a127e851dc34be7dbccb86a5c291f0e64fc51e",
+  "motion.py": "3f63724f48395a15025da1acad8135cc045b84bad7839b5e26cdcca3aced062f",
+  "observation.py": "142415ba54f2009d6f579f490c416a93d965e0ed16ec0feacab317dcc37a4a3a",
+  "params.py": "ea339684a70fd2718389967f79b54aa6ea185b390ec582584619b7ddcdf4564c",
+  "perception.py": "49504faf9cf53bcee28aca2292a74dfac98c0f188bae5aaa794f1f664e46019f",
+  "red.py": "ab5d199898be1c168fe1b813470d1feb536042aed35a73102b62dbbbf3a579ea",
+  "shell.py": "dc4c21e61964440bb560bf4135c1e5bf7ef64461b2a432f743ba2f9605aec804",
+  "wallmap.py": "41f2ce043125de45c905d3d8a7694c8fe5f46373689eb8d097ce3f2692791a00"
+ },
+ "name": "p2_540054b",
+ "source_commit": "540054b8ef9f72c4da994f0322151fa674edd8ab",
+ "source_dir": "src/swarm_rescue/solutions/eod"
+}
