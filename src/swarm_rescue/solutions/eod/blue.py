@@ -150,6 +150,7 @@ class RescueBrain(BrainBase):
             return Command()
         self._read_messages(obs)
         self._perceive(obs)
+        self._coverage_tick(obs.step)
         cmd = self._decide(obs)
         self.was_grasping = obs.grasping
         self._finish(obs, cmd)
@@ -162,7 +163,9 @@ class RescueBrain(BrainBase):
                     "bombs_free": sum(b.status == 0 for b in self.bombs.items),
                     "bombs_gone": sum(b.status == 2 for b in self.bombs.items),
                     "dc_points": len(self.dc.points),
-                    "est_disturbances": self.est.disturbance_count})
+                    "est_disturbances": self.est.disturbance_count,
+                    "est_carry_odometer_steps": self.est.carry_odometer_steps,
+                    "est_carry_model_steps": self.est.carry_model_steps})
         return out
 
     @property
@@ -176,6 +179,7 @@ class RescueBrain(BrainBase):
             sender = msg["id"]
             self.team.update(msg, now)
             self._read_fleet(msg)
+            self._read_coverage(msg)
             for item in msg.get("b", ()):
                 # Digests repeat every step; an item already applied is skipped
                 # (re-applying it could only recreate stale records).
@@ -225,7 +229,7 @@ class RescueBrain(BrainBase):
             tg=(round(self.target[0], 1), round(self.target[1], 1)) if self.target else None,
             b=self.bombs.digest(), cl=claim, rc=relayed, tp=self._fleet_digest(now, self.busy),
             dc=tuple(round(v, 1) for v in box) if box else None,
-            dp=tuple(self.disposals[-6:]))
+            dp=tuple(self.disposals[-6:]), cv=self._coverage_message(now))
 
     # ------------------------------------------------------------ perception
     def _perceive(self, obs: Observation) -> None:
@@ -500,10 +504,8 @@ class RescueBrain(BrainBase):
         return float(arr[i, 0]), float(arr[i, 1])
 
     def _explore(self, obs: Observation, view: LocalView, others) -> Command:
-        est = self.est
         now = obs.step
-        if (self.state != "explore" or self.target is None or now - self.goal_step > EXPLORE_PERIOD
-                or math.hypot(self.target[0] - est.x, self.target[1] - est.y) < 30.0):
+        if self._explore_due(now, EXPLORE_PERIOD):
             self.target = self._choose_explore_target(now)
             self.goal_step = now
             self.path = []

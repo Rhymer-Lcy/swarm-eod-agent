@@ -17,6 +17,8 @@ import numpy as np
 
 from . import params as P
 from .comms import TeamTable
+from .coverage import PERIOD as COVERAGE_PERIOD
+from .coverage import TeamCoverage
 from .estimator import PoseEstimator
 from .grid import OccupancyGrid, Planner
 from .motion import LocalView, StuckMonitor, drive, lookahead_point
@@ -25,11 +27,24 @@ from .perception import DisposalCenterModel, entity_mask, lidar_endpoints, near_
 
 REPLAN_PERIOD = 25
 FLEET_MAX_AGE = 200
+TARGET_BUDGET_MIN = 60
+TARGET_BUDGET_MAX = 400
+YIELD_RADIUS = 100.0
 
 
 class BrainBase:
     SEARCH_RANGE = 160.0
     FREE_RANGE = P.FREE_RANGE
+    # Shared exploration (Phase 2). Off for a role unless its evaluation
+    # supports it: team coverage summaries exclude teammates' searched blocks
+    # from exploration targets; committed targets are kept until reached,
+    # covered or expired instead of being re-chosen every period.
+    SHARE_COVERAGE = False
+    COMMIT_TARGETS = False
+    # Whether team coverage also removes frontier cells (unmapped space) in
+    # covered blocks. Coverage is a semantic-search notion: right for a role
+    # that searches for bombs, wrong for a role that must map walls there.
+    COVERAGE_DROPS_FRONTIER = True
 
     def __init__(self, identifier: int, n_drones: int, size_area: Tuple[int, int],
                  max_steps: Optional[int]) -> None:
@@ -60,6 +75,10 @@ class BrainBase:
         self._me_field: Optional[np.ndarray] = None
         self._me_field_step = -10_000
         self._me_field_cell: Tuple[int, int] = (-100, -100)
+        self.coverage = TeamCoverage(self.size, self.grid.cell, self.grid.ny, self.grid.nx)
+        self.target_budget = 0
+        self.diag.update({"target_switches": 0, "target_yields": 0, "target_expired": 0,
+                          "target_covered": 0})
 
     # -- framework-facing -------------------------------------------------
     def outgoing_message(self):
@@ -165,14 +184,25 @@ class BrainBase:
     def _choose_explore_target(self, now: int, disperse_until: int = 250
                                ) -> Optional[Tuple[float, float]]:
         g = self.grid
-        candidates = (g.free() & ~self.searched) | g.frontier()
+        searched = self.searched
+        candidates = (g.free() & ~searched) | g.frontier()
+        if self.SHARE_COVERAGE:
+            # Blocks covered by the team count as searched; frontier cells in
+            # them are dropped. Falls back to own knowledge if nothing is left.
+            covered = self.coverage.cell_mask()
+            frontier = g.frontier()
+            if self.COVERAGE_DROPS_FRONTIER:
+                frontier = frontier & ~covered
+            shared = (g.free() & ~(searched | covered)) | frontier
+            if shared.any():
+                candidates, searched = shared, searched | covered
         if not candidates.any():
             return None
         field = self._field_from_me(now)
         reach = np.isfinite(field) & candidates
         if not reach.any():
             return None
-        density = cv2.blur((~self.searched).astype(np.float32), (7, 7))
+        density = cv2.blur((~searched).astype(np.float32), (7, 7))
         rows, cols = np.nonzero(reach)
         score = field[rows, cols] * g.cell - 120.0 * density[rows, cols]
         wx = (cols + 0.5) * g.cell - g.width / 2.0
@@ -189,7 +219,52 @@ class BrainBase:
             ang = np.arctan2(wy - self.home[1], wx - self.home[0])
             score += 80.0 * np.abs((ang - sector + math.pi) % (2 * math.pi) - math.pi)
         i = int(np.argmin(score))
+        # Commitment budget: the expected travel time at a moderate speed plus
+        # a margin, bounded so that a stale target always expires.
+        travel = field[rows[i], cols[i]] * g.cell / (0.5 * P.MAX_SPEED)
+        self.target_budget = int(min(TARGET_BUDGET_MAX, max(TARGET_BUDGET_MIN, travel + 40)))
         return float(wx[i]), float(wy[i])
+
+    def _explore_due(self, now: int, period: int) -> bool:
+        """Whether the exploration target must be (re)chosen this step."""
+        est = self.est
+        if self.state != "explore" or self.target is None or \
+                math.hypot(self.target[0] - est.x, self.target[1] - est.y) < 30.0:
+            return True
+        if not self.COMMIT_TARGETS:
+            return now - self.goal_step > period
+        if now - self.goal_step > self.target_budget:
+            self.diag["target_expired"] += 1
+            return True
+        if (now - self.goal_step) % 10 == 0:
+            r, c = self.grid.to_cell(*self.target)
+            covered = self.searched[r, c] or \
+                (self.SHARE_COVERAGE and self.coverage.cell_mask()[r, c])
+            if covered and not self.grid.frontier()[r, c]:
+                self.diag["target_covered"] += 1
+                return True
+        # Yield to a lower identifier heading for the same area.
+        for other, tgt in self.team.targets(now):
+            if other < self.id and math.hypot(tgt[0] - self.target[0],
+                                              tgt[1] - self.target[1]) < YIELD_RADIUS:
+                self.diag["target_yields"] += 1
+                return True
+        return False
+
+    # -- coverage sharing -------------------------------------------------------
+    def _coverage_tick(self, now: int) -> None:
+        if self.SHARE_COVERAGE and (now + self.id) % COVERAGE_PERIOD == 0:
+            self.coverage.update_own(self.searched, self.grid.occupied())
+
+    def _read_coverage(self, msg: dict) -> None:
+        if self.SHARE_COVERAGE and msg.get("cv") is not None:
+            self.coverage.merge(msg["cv"])
+
+    def _coverage_message(self, now: int):
+        """Coverage summary for this step's message (every PERIOD steps)."""
+        if self.SHARE_COVERAGE and (now + self.id) % COVERAGE_PERIOD == 0:
+            return self.coverage.payload()
+        return None
 
     # -- path following -------------------------------------------------------
     def _path_target(self, obs: Observation, goal: Tuple[float, float]) -> Tuple[float, float]:
