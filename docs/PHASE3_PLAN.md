@@ -154,3 +154,26 @@ steps per second.
 * No round beyond 30, no sweeps, no parallel rounds.
 
 ## Addenda
+
+### Addendum 1 (2026-10-14, after 21 of 30 rounds; before any red round)
+
+* **Blue decision (section 7 rules, rounds 1-18, all at `bb569c3`).**
+  Block M: B2 disposed 50 of 50 bombs against 38 of 50 for B1 and fewer in
+  no pair (more in all five; sign test p = 0.0625); every B1 round reached
+  the step limit with carriers still holding bombs, every B2 round ended
+  with all bombs disposed. Block G: equal disposals in all four pairs (10 of
+  10 each), mean official score 97.55 for B2 against 96.12 for B1. No round
+  of either arm crashed, reached the wall-clock limit, reported a brain
+  error or lost a drone. Median steps per second 71.8 (B2) against 68.2
+  (B1). **B2 is adopted.** Per-round values are in EXPERIMENTS.md, section 8.
+* **Parity (round 19).** The native N-1 round ended exactly like the
+  instrumented B2 arm of M-1 (all bombs at step 791, score 99.44, health
+  97.2).
+* **Held-out native rounds (20, 21).** N-2 and N-3 ended with all bombs
+  disposed (steps 1711 and 1336).
+* **Measurement note.** In a round that ends because the last bomb was
+  disposed, the truth log stops before that release is recorded, so
+  `carry_episodes.py` reports the final carry as "held at end"; such an
+  episode is counted as a disposal (each of these rounds records 10 of 10
+  disposed). Delivery failures are therefore 12 for B1 (all in block M,
+  equal to its undisposed bombs) and 0 for B2.
