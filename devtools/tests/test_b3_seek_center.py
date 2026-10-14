@@ -1,5 +1,10 @@
 """B3 (Phase 4): carriers search for a disposal center they do not know.
 
+B3 was evaluated in Phase 4 stage 2 and **not adopted** (it disposed fewer
+bombs than B2 in one pair; docs/PHASE4_PLAN.md, addendum 3). It is kept as
+the frozen package ``devtools/comparators/p4_ce09cb7``, which these tests
+exercise, so that the evidence stays reproducible.
+
 The defect (P4CorridorV1, real simulator round V-C2 and offline P4-A014): the
 frozen B2 sent a carrier that does not know the center straight to its start
 area, where it waited; when every drone had picked up a bomb before anyone
@@ -24,7 +29,7 @@ if str(REPO) not in sys.path:
 
 from devtools.comparators.p3_067818a import blue as b2_blue  # noqa: E402
 from devtools.simlab import delivery_fixtures as DF  # noqa: E402
-from swarm_rescue.solutions.eod import blue as b3_blue  # noqa: E402
+from devtools.comparators.p4_ce09cb7 import blue as b3_blue  # noqa: E402
 from swarm_rescue.solutions.eod import params as P  # noqa: E402
 
 

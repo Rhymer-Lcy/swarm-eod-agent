@@ -19,6 +19,10 @@ Git history. A comparator is selected in the runner with
   the Phase 3 blue rounds at ``bb569c3``, the whole package to the R2 freeze
   at ``5e0803d``). Frozen for Phase 4; any later change is a new candidate
   with a new identifier.
+* ``p4_ce09cb7``: the Phase 4 blue candidate B3 (B2 plus a search for an
+  unknown disposal center while carrying) with R2, at ``ce09cb7``. Not
+  adopted (docs/PHASE4_PLAN.md, addendum 3); kept for its tests and as a
+  starting point.
 
 Nothing under ``solutions/`` may import this package.
 """

@@ -21,7 +21,7 @@ MANIFESTS = sorted(COMPARATORS.glob("*.json"))
 # Number of agent modules in each frozen package (the Phase 2 package added
 # coverage.py). Typed here, not read from the manifest, so that a manifest
 # and package that lose a file together still fail.
-EXPECTED_FILES = {"p1_ddc6897": 14, "p2_540054b": 15, "p3_067818a": 16}
+EXPECTED_FILES = {"p1_ddc6897": 14, "p2_540054b": 15, "p3_067818a": 16, "p4_ce09cb7": 16}
 
 
 def test_registered_comparators():
@@ -56,8 +56,8 @@ def test_comparator_files_match_git_history(manifest: Path):
 
 
 # Files of solutions/eod that may differ from the frozen B2/R2 package, with
-# the candidate they carry. Phase 4: blue.py holds the candidate B3 under
-# evaluation (docs/PHASE4_PLAN.md, addendum 2); R2 is unchanged.
+# the candidate they carry. Empty since the end of Phase 4: the candidate B3
+# was not adopted and blue.py is B2 again (B3 is kept as p4_ce09cb7).
 CANDIDATE_FILES = {"blue.py": "B3"}
 
 
@@ -103,6 +103,9 @@ def test_comparator_is_importable_and_isolated():
     assert B2Drone.__module__ == "devtools.comparators.p3_067818a.shell"
     assert b2_blue.RescueBrain is not current_blue.RescueBrain
     assert not hasattr(b2_blue.RescueBrain, "_seek_center")      # frozen B2, not B3
+    from devtools.comparators.p4_ce09cb7 import blue as b3_blue
+    assert hasattr(b3_blue.RescueBrain, "_seek_center")
+    assert b3_blue.BrainBase.__module__ == "devtools.comparators.p4_ce09cb7.base"
     assert b2_blue.ApproachSet is b2_delivery.ApproachSet
     assert b2_delivery.ApproachSet is not current_delivery.ApproachSet
     assert r2_red.PlaceBrain is not current_red.PlaceBrain
