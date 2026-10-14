@@ -55,7 +55,8 @@ def episodes(run_dir: Path, map_name: str) -> dict:
             while e + 1 < len(rows) and held[e + 1]:
                 e += 1
             released = e + 1 < len(rows)
-            rewarded = released and rows[e + 1, f["reward"]] > rows[e, f["reward"]] + 1e-9
+            gain = float(rows[e + 1, f["reward"]] - rows[e, f["reward"]]) if released else 0.0
+            rewarded = gain > 1e-9
             errs = []
             for i in range(s, e + 1):
                 b = est_by_step.get(int(rows[i, f["step"]]) + 1)
@@ -67,6 +68,9 @@ def episodes(run_dir: Path, map_name: str) -> dict:
                 "drone": int(ident), "start": int(rows[s, f["step"]]), "end": int(last[f["step"]]),
                 "length": int(e - s + 1),
                 "outcome": "disposed" if rewarded else ("dropped" if released else "held_at_end"),
+                # A bomb held by two drones when it is disposed splits its
+                # reward between them (0.5 each): one disposal, two episodes.
+                "reward_gain": round(gain, 3),
                 "end_distance_to_center": round(box_distance(last[f["x"]], last[f["y"]], box), 1),
                 "end_position": (round(float(last[f["x"]]), 1), round(float(last[f["y"]]), 1)),
                 "health_lost": int(rows[s, f["health"]] - last[f["health"]]),
@@ -96,9 +100,13 @@ def reconcile(episodes_: list, official_disposed: int, total: int, last_step: in
     the rewarded releases in the log is credited to episodes still held at
     the last logged step (nearest the center first). What remains held is a
     genuine unresolved carry. A difference that the held episodes cannot
-    explain is reported as inconsistent rather than forced.
+    explain is reported as inconsistent rather than forced. Logged disposals
+    are the summed reward gains, so a bomb disposed while two drones held it
+    (reward split 0.5/0.5, both episodes "disposed") counts once; such
+    episodes are reported as ``shared_disposal_episodes``.
     """
-    logged = sum(e["outcome"] == "disposed" for e in episodes_)
+    logged = int(round(sum(e.get("reward_gain", 1.0) for e in episodes_
+                           if e["outcome"] == "disposed")))
     held = [e for e in episodes_ if e["outcome"] == "held_at_end"]
     at_end = sorted((e for e in held if e["end"] >= last_step - 1),
                     key=lambda e: e["end_distance_to_center"])
@@ -108,6 +116,8 @@ def reconcile(episodes_: list, official_disposed: int, total: int, last_step: in
     return {
         "official_disposed": official_disposed, "bombs_total": total,
         "disposed_logged": logged,
+        "shared_disposal_episodes": sum(e["outcome"] == "disposed"
+                                        and e.get("reward_gain", 1.0) < 0.99 for e in episodes_),
         "disposed_at_termination": len(credited),
         "dropped": sum(e["outcome"] == "dropped" for e in episodes_),
         "held_unresolved": len(held) - len(credited),
