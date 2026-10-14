@@ -8,7 +8,14 @@ area, and at least ``spacing`` px apart. Profiles:
 
 * ``uniform``: uniform over the admissible region;
 * ``far``: probability proportional to distance from the disposal center,
-  a proxy for layouts that are slow to clear.
+  a proxy for layouts that are slow to clear;
+* ``wall`` (Phase 4): probability decaying with distance from the nearest
+  wall, as a red team that maximizes wall coverage leaves its bombs;
+* ``cluster`` (Phase 4): bombs within 130 px of three random centres
+  (spacing 45 px), as several red drones placing in one area leave them.
+
+Fixtures of Phase 4 custom scenarios (``p4_scenarios``) are accepted by
+name like the official maps.
 
 Every file is labelled ``"synthetic": true`` with its generator settings.
 Synthetic layouts are not competition layouts; results on them are reported
@@ -68,6 +75,20 @@ def sample_layout(fx: dict, n_bombs: int, seed: int, profile: str = "uniform",
         dc = fx["disposal_center"]
         weight = np.hypot(xs - dc["x"], ys - dc["y"])
         weight = weight / weight.sum()
+    elif profile == "wall":
+        # Close to walls, as a red team maximizing wall coverage leaves them.
+        dist = cv2.distanceTransform((1 - fx["walls"].astype(np.uint8)).astype(np.uint8),
+                                     cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        weight = np.exp(-(dist[rows, cols] - 26.0) / 20.0)
+        weight = weight / weight.sum()
+    elif profile == "cluster":
+        # Three cluster centres; bombs within 130 px of one of them.
+        centres = [(float(xs[k]), float(ys[k])) for k in rng.choice(len(xs), 3, replace=False)]
+        near = np.zeros(len(xs), dtype=bool)
+        for cx, cy in centres:
+            near |= np.hypot(xs - cx, ys - cy) < 130.0
+        weight = near / near.sum()
+        spacing = min(spacing, 45.0)
     else:
         weight = None
     chosen = []
@@ -95,7 +116,8 @@ def main(argv=None) -> int:
     parser.add_argument("--map", required=True)
     parser.add_argument("--bombs", type=int, default=10)
     parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--profile", choices=["uniform", "far"], default="uniform")
+    parser.add_argument("--profile", choices=["uniform", "far", "wall", "cluster"],
+                        default="uniform")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
     fx = load_fixture(args.map)
