@@ -22,7 +22,12 @@ adds no simulation or scoring logic of its own. What it adds:
   ends, so a killed or crashed run stays visible as ``started`` without a
   matching ``finished`` line;
 * a round budget: the run is refused when the ledger already holds
-  ``--budget`` started rounds for ``--phase``.
+  ``--budget`` started rounds for ``--phase``;
+* Phase 4 custom geometry: a ``--map`` value that is not ``Map01``-``Map05``
+  names a scenario of ``p4_scenarios.py``, whose map class (framework
+  elements only) is made resolvable by the launcher for this round. Such
+  rounds are recorded with ``map_kind: custom`` and the specification's
+  SHA-256; they are never official-map or competition results.
 
 Run on a host with an OpenGL context (see docs/ENVIRONMENT.md), from the
 repository root, for example::
@@ -141,6 +146,13 @@ def resolve_agent(spec: str):
     return (lambda _mode: cls), spec, module
 
 
+OFFICIAL_MAPS = tuple(f"Map0{i}" for i in range(1, 6))
+
+
+def is_official_map(name: str) -> bool:
+    return name in OFFICIAL_MAPS
+
+
 def run_mode(args: argparse.Namespace) -> str:
     """How the agent was attached to the launcher in this round.
 
@@ -189,7 +201,14 @@ def run_round(args: argparse.Namespace) -> int:
     write_plan(plan, map_name=args.map, mode=args.mode, drones=args.drones,
                bombs_per_drone=args.bombs_per_drone, bombs_file=bombs_file)
 
-    map_source = REPO_ROOT / "src" / "swarm_rescue" / "maps" / f"map_{args.map[-2:]}.py"
+    custom = not is_official_map(args.map)
+    custom_spec = None
+    if custom:
+        from . import p4_scenarios
+        custom_spec = p4_scenarios.spec_by_name(args.map)
+        map_source = Path(p4_scenarios.__file__)
+    else:
+        map_source = REPO_ROOT / "src" / "swarm_rescue" / "maps" / f"map_{args.map[-2:]}.py"
     base = {
         "run_id": run_id, "phase": args.phase, "label": args.label,
         "map": args.map, "mode": args.mode, "drones": args.drones,
@@ -197,6 +216,9 @@ def run_round(args: argparse.Namespace) -> int:
         "bombs_file": bombs_file,
         "bombs_file_sha256": _sha256(Path(bombs_file)) if bombs_file else None,
         "map_source_sha256": _sha256(map_source),
+        "map_kind": "custom" if custom else "official",
+        "custom_spec_sha256": p4_scenarios.spec_sha256(custom_spec) if custom else None,
+        "custom_partition": custom_spec["partition"] if custom else None,
         "agent": args.agent, "competition_mode": not args.no_competition,
         "seed": args.seed, "truth_log": not args.no_truth_log,
         "run_mode": run_mode(args),
@@ -217,6 +239,11 @@ def run_round(args: argparse.Namespace) -> int:
 
     import swarm_rescue.launcher as launcher_module
     from .diagnostics import TruthSink, with_truth_log
+
+    if custom:
+        # Evaluation-only map class made of framework elements; the launcher
+        # resolves map names in its own namespace (devtools/simlab/p4_scenarios.py).
+        p4_scenarios.register(launcher_module, args.map)
 
     selector, agent_desc, agent_module = resolve_agent(args.agent)
     sink = None if args.no_truth_log else TruthSink()
@@ -353,11 +380,13 @@ class _Tee(io.TextIOBase):
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--label", required=True, help="short run label (no spaces)")
-    p.add_argument("--phase", default="phase3", help="budget bucket")
-    p.add_argument("--budget", type=int, default=30,
-                   help="maximum rounds started in this phase (default 30, the "
-                        "Phase 3 authorization)")
-    p.add_argument("--map", required=True, choices=[f"Map0{i}" for i in range(1, 6)])
+    p.add_argument("--phase", default="phase4", help="budget bucket")
+    p.add_argument("--budget", type=int, default=24,
+                   help="maximum rounds started in this phase (default 24, the "
+                        "Phase 4 authorization)")
+    p.add_argument("--map", required=True,
+                   help="official map (Map01-Map05) or a Phase 4 custom-geometry "
+                        "scenario name (devtools/simlab/p4_scenarios.py, e.g. P4PocketV1)")
     p.add_argument("--mode", required=True, choices=["rescue", "place"])
     p.add_argument("--drones", type=int, default=10)
     p.add_argument("--bombs-per-drone", type=int, default=None)
@@ -377,6 +406,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if not is_official_map(args.map):
+        from . import p4_scenarios
+        try:
+            p4_scenarios.parse_name(args.map)
+        except KeyError as exc:
+            print(f"--map: {exc}", file=sys.stderr)
+            return 2
     if args.native:
         if args.agent != "official" or args.no_competition:
             print("--native requires --agent official and competition mode", file=sys.stderr)
