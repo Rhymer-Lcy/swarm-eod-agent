@@ -1,9 +1,16 @@
-"""The frozen comparator agents must stay byte-identical to their source commit."""
+"""The frozen comparator agents must stay byte-identical to their source commit.
+
+Each manifest's ``source_commit`` names the published commit that holds the
+frozen files. The package name keeps the identifier under which the agents
+were frozen and evaluated (for example ``p3_067818a``); experiment records of
+that time cite that identifier.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -41,12 +48,20 @@ def test_comparator_files_match_manifest(manifest: Path):
 
 @pytest.mark.parametrize("manifest", MANIFESTS, ids=lambda p: p.stem)
 def test_comparator_files_match_git_history(manifest: Path):
+    """The manifest's source commit must exist in this clone and be reachable
+    from HEAD, and hold every frozen file byte for byte. A missing or
+    unreachable commit is a provenance failure, not a reason to skip: a
+    skipped check would let a manifest point at nothing unnoticed. (A shallow
+    clone that lacks the commit fails here by design.)"""
     data = json.loads(manifest.read_text(encoding="utf-8"))
     commit = data["source_commit"]
+    assert re.fullmatch(r"[0-9a-f]{40}", commit), f"malformed source commit {commit!r}"
     probe = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{commit}^{{commit}}"],
                            capture_output=True)
-    if probe.returncode != 0:
-        pytest.skip(f"source commit {commit[:7]} not in this clone")
+    assert probe.returncode == 0, f"source commit {commit} is not in this clone"
+    reach = subprocess.run(["git", "-C", str(REPO), "merge-base", "--is-ancestor", commit, "HEAD"],
+                           capture_output=True)
+    assert reach.returncode == 0, f"source commit {commit} is not reachable from HEAD"
     package = COMPARATORS / manifest.stem
     for name in data["files_sha256"]:
         blob = subprocess.run(["git", "-C", str(REPO), "show",
