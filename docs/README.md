@@ -20,6 +20,17 @@ The baseline's own `README.md`, `INSTALL.md` and `doc/` (Chinese participant
 guides) are kept verbatim and remain authoritative for the simulator and the
 submission interface.
 
+**Commit identifiers in the phase documents.** Documents, ledgers and review
+packages written up to 2026-10-14 (Phases 0-4) cite commit identifiers of the
+repository history as it was when the work was done. That history was later
+rewritten, so those identifiers do not resolve in this repository. The agent
+code they denote is unchanged and identified by content: each frozen
+comparator package under `devtools/comparators/` lists the SHA-256 of every
+file and the current commit that holds it (`source_commit`, checked by
+`devtools/tests/test_comparators.py`). Package names such as `p3_067818a`
+keep the identifier under which the agents were frozen and evaluated.
+Recorded results are unaffected.
+
 ## Documents
 
 | File | Content |
