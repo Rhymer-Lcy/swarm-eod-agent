@@ -950,3 +950,99 @@ Recorded as they happened; none changed a reported result.
 * Four one-second interpreter calls (OpenCV thread variables) ran pinned to
   node 0 with a timeout but without the occupancy gate; one JSON file was
   read with the server's system Python instead of the project interpreter.
+
+## 10. Phase 5 (2026-10-14): candidate B4-S, offline development
+
+No simulator round has been started in Phase 5 (0 of its 24 starts). The
+evidence below comes from Phase 4 truth logs (diagnosis only), state tests
+and the offline approximation; offline results are development signals, not
+competition results. Only development scenarios were used (Phases 1-4 maps,
+C-probe and the C-final pocket and corridor scenarios already used in Phase 4
+stage 2); the C-reserve scenarios were neither generated as fixtures nor run.
+
+### 10.1 Why B3 lost a bomb on P4PocketV2 (round S2-2, truth log)
+
+`devtools/simlab/p5_diagnosis.py` classifies every carrying step by the
+drone's true distance to the center and true line of sight to it.
+
+* The unresolved carry (drone 0): 4112 of its 4766 carrying steps were within
+  100 px of the center without line of sight, on the walled side, from about
+  step 1000 to the end. It held one own surface point and one witness;
+  76 radial fallbacks, 15 approach failures, 3235 blocked terminal decisions.
+  B2's progress watch penalizes witnesses only; the radial goals that replace
+  them are not penalized, so the carrier returned to the same blocked side.
+* Two drones on one bomb: drone 5, fetching its own claim with the grasper on
+  (B2 closes it within 90 px of the claim), passed within reach of the bomb
+  drone 8 was carrying and grasped it too (the framework allows several
+  holders, one bomb per drone). They held it together for about 3170 steps
+  (health 50 to 13 and to 11) and the reward was split. Which detection
+  drone 5 was steering on is not determined. B2 has the same grasp logic; one
+  round per arm does not show whether B3's trajectories caused the encounter.
+* P4CorridorV2 (S2-1, B3): the four unresolved carriers knew the center from a
+  teammate's box only, passed 41-56 px from it on its walled sides and ended
+  near their start area. Whether their own maps closed the corridor (section
+  9.7, the narrow-passage limitation) is not shown.
+
+Common cause: B2 has no policy for a carrier without a verified approach to
+the center, whether the center is unknown, known from a box only, or known
+from a few points on a walled side.
+
+### 10.2 Offline attempts
+
+| Attempt | Content | Result |
+|---|---|---|
+| P5-A001 | B4-S first version on 16 development specs (12 of P4-A018 plus P4PocketV2 and P4CorridorV2, seeds 1-2) | 133 of 160 bombs; fewer than B2 on P4CorridorV1 seed 2 (3 against 10); slower than B2 on P4PocketV2 (2775 and 2798 against 2184 and 2028 steps) |
+| P5-A002, P5-A003 | B2 and B3 on the same specs | 130 and 135 of 160; every value equal to P4-A014 (B2) and P4-A018 (B3): the harness reproduces |
+| P5-A004 | B4-S second version, same specs | 144 of 160 |
+| P5-A005 to P5-A008 | B2 and B4-S second version, offline seeds 3-6, pocket and corridor (V1 and V2) | see 10.3 |
+
+**Why the first version was revised.** It replaced B2's radial goals by view
+positions around the known box whenever no witnessed stand-off existed. A box
+built from a partial view of the center is smaller than the center, so view
+positions fell inside it or behind its walls (traced on P4CorridorV1 seed 2:
+seven carriers informed by step 2260 never saw a face). B2's radial goals,
+reached through unknown cells, do not depend on the box's extent. The second
+version keeps B2's goals while they are reachable and escapes to view
+positions only when they are unreachable or an approach on them failed.
+
+### 10.3 B2 against B4-S (second version), offline seeds 1-6
+
+| Spec | B4-S more bombs | equal | fewer | Notes |
+|---|---|---|---|---|
+| P4CorridorV1 | 5 | 0 | 1 | B2: 0 of 10 in five seeds; seed 2 B2 10 at step 4808, B4-S 9 |
+| P4CorridorV2 | 6 | 0 | 0 | B2: 0 of 10 in every seed; B4-S 2-7 |
+| P4PocketV1 | 0 | 6 | 0 | all 10 of 10; B4-S faster in 4 of 6 |
+| P4PocketV2 | 0 | 6 | 0 | all 10 of 10; B4-S faster in 6 of 6 |
+
+Over these 24 paired runs: 191 bombs (B4-S) against 130 (B2). The one
+deficit (P4CorridorV1 seed 2) comes from discovery time: B2's unloaded
+explorer saw the center at step 664, B4-S's first sighting was at step 1874,
+after which B4-S delivered 9 bombs in about 2800 steps (B2: 10 in about 4100
+after its discovery). On the other development specs (Map01, Map03,
+P4GpsdarkV1, P4ComdarkV1, seeds 1-2 where applicable) B4-S's outcome, step
+count and health equal B2's; on P4ClutterV1 it finished earlier (1345 and
+1298 against 2006 and 1748 steps).
+
+**Costs.** Carriers that search lose more health: in the corridor runs where
+B2 delivered nothing it lost 10-25 health points, B4-S 67-113 (offline
+contact model). Corridor deliveries remain incomplete (at most 9 of 10).
+Brain time per drone-step (offline, mean): 0.432-0.826 ms against
+0.425-0.810 ms for B2; maximum 8.2-25.6 ms against 5.5-17.8 ms.
+
+### 10.4 Tests
+
+`devtools/tests/test_b4s.py` (31 cases, each with the frozen B2, and where
+useful B3, as the baseline): unknown-center seeking, fallback and resumption;
+missing sensors and messages; the `hidden` fixture (B4-S delivers in each of
+seeds 1-4; B2 delivers nothing in seeds 1-2, `test_b3_seek_center.py`); transitions from a teammate's box and from own
+detections; failed and empty view positions; bounded state; no terminal push
+or path across a wall from a blocked side; known-center delivery and
+box-only delivery with an incomplete map command-identical to B2; Risk A's
+complete-map deadlock (B4-S delivers in 3 of 3 seeds); the walled-side
+witness trap of S2-2 (B2 never delivers, B4-S delivers); determinism; the
+grasp guard; bomb-record reconciliation; malformed boxes. `test_p4_risk_a.py`
+now characterizes the frozen package `p3_067818a`, which it always described.
+Seven planted mutants (no seeking; B2's straight drive to the start area; no
+grasp guard; every known center treated as verified; terminal push without
+a certificate; no message validation; no escape) each make tests fail. The
+full suite passes on the remote server (278 tests).

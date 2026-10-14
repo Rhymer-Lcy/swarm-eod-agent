@@ -1,7 +1,11 @@
 # Agent design: interfaces, architecture and role policies
 
-Dates are business dates in UTC+8. Phase 4 (2026-10-14) validated B2 and R2
-without changing them: the agent package is byte-identical to `067818a`, and
+Dates are business dates in UTC+8. Phase 5 (2026-10-14) adds the blue
+candidate **B4-S** in `solutions/eod/blue.py` (section 4), validated offline
+only and not adopted; B2 remains the accepted blue agent, frozen as
+`devtools/comparators/p3_067818a`, and R2 is unchanged. Phase 4 (2026-10-14)
+validated B2 and R2 without changing them: the agent package was
+byte-identical to `067818a`, and
 the Phase 4 blue candidate B3 (section 4) was not adopted and is kept as the
 frozen package `devtools/comparators/p4_ce09cb7`. Status as of Phase 3: the
 blue candidate **B2** (rescue) is implemented under
@@ -160,6 +164,35 @@ red only:  wallmap.py
   (`_seek_center`). It turned a 0/10 corridor round into 6/10 but disposed
   one bomb fewer than B2 in another pair, so B2 was retained under the
   preregistered rule (PHASE4_PLAN.md, addendum 3; EXPERIMENTS.md 9.7).
+* **Candidate B4-S (Phase 5, under evaluation; not adopted).** Present in
+  `solutions/` (only `blue.py` differs from B2), validated offline only.
+  It changes B2 only where B2's carrier has no exit (EXPERIMENTS.md
+  section 10 gives the mechanisms found in B3's rounds):
+  * *Center unknown:* the carrier searches for it (reachable unsearched or
+    frontier cells, the unloaded exploration score without the start-up
+    bias, travel budget at carrying speed, failed goals excluded for a
+    while) instead of waiting at its start area; with nothing left to
+    search it goes there along a planned path and searches again later.
+  * *Center known, no verified approach:* a verified approach is a
+    supported, unpenalized witnessed stand-off, or a map-checked,
+    unpenalized radial stand-off from an own box. Without one, B2's radial
+    goals are kept while they are reachable; when they are not, or when an
+    approach on them fails, the carrier visits view positions 72 px out from
+    the faces of the known box for one penalty period, excluding positions
+    from which no face was seen (walls stop semantic rays), and then returns
+    to B2's goals. A face in sight still allows the certified terminal push.
+    With a verified approach, and with reachable radial goals, the delivery
+    is B2's, command for command.
+  * *Grasp guard:* a drone fetching its claim keeps the grasper off while a
+    bomb held by another drone (flagged as grasped by the semantic sensor)
+    or a carrying teammate is within grasping reach; the framework would
+    otherwise let it grasp the held bomb too.
+  * *Message validation:* a teammate's center box is accepted only when
+    finite and well ordered.
+  B2's witness certificate is unchanged, including its known weakness: the
+  last 12-14 px of a witness segment are not checked against the map, so a
+  surface point recorded a few pixels inside a wall can certify a push into
+  it until the approach is penalized (EXPERIMENTS.md section 10).
 
 ## 5. Red candidate R2 (`red.py`, `wallmap.py`; R1 and R0.1 differences noted)
 
@@ -264,8 +297,8 @@ open, in priority order:
    many bombs as drones, all ten drones carried a bomb and none ever saw the
    center (P4CorridorV1 and P4CorridorV2: 0 of 10). The supplied maps place
    the center in view of the start area. B3 addresses this and was not
-   adopted; the next step is a B3-like search that does not cost deliveries
-   elsewhere.
+   adopted; the Phase 5 candidate B4-S addresses it offline (section 4,
+   EXPERIMENTS.md section 10); no simulator evidence yet.
 2. **The planner closes narrow passages (all blue and red versions).** With
    24 px obstacle inflation on 8 px cells, a passage between ideal walls is
    untraversable for the planner below about 56 px (up to 62 px depending
@@ -277,7 +310,9 @@ open, in priority order:
    start area behind a walled side, the fallback's only goal is the enclosed
    middle and the carrier waits behind the wall (offline, `test_p4_risk_a.py`).
    With an incomplete map the same goal draws the carrier around the walls
-   and it recovers; the terminal push never moved through a wall.
+   and it recovers; the terminal push never moved through a wall. B4-S
+   leaves B2's goals in place there and escapes to view positions when they
+   are unreachable (offline: delivered in 3 of 3 seeds, B2 in none).
 4. **Solid-interior inference takes sealed rooms as solid (red, measured).**
    Precision 0.47-0.48 on a synthetic map with two sealed rooms (94-99 % of
    the false area inside them) against 0.98 on Map04; the whole-run effect on

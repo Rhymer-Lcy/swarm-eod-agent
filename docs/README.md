@@ -14,7 +14,11 @@ again against frozen comparators; see [PHASE3_REPORT.md](PHASE3_REPORT.md)
 for the status and limits. Phase 4 (2026-10-14) validated the frozen B2 and
 R2 on new layouts and synthetic custom geometry, found a hidden-center
 failure, rejected the candidate B3 under its preregistered rule and kept B2
-and R2; see [PHASE4_REPORT.md](PHASE4_REPORT.md).
+and R2; see [PHASE4_REPORT.md](PHASE4_REPORT.md). Phase 5 (2026-10-14) adds
+the blue candidate B4-S in `solutions/`, validated offline only and not
+adopted; B2 stays the accepted blue agent (see
+[AGENT_DESIGN.md](AGENT_DESIGN.md) section 4 and
+[EXPERIMENTS.md](EXPERIMENTS.md) section 10).
 
 The baseline's own `README.md`, `INSTALL.md` and `doc/` (Chinese participant
 guides) are kept verbatim and remain authoritative for the simulator and the
