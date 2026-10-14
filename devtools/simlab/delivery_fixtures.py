@@ -45,7 +45,9 @@ W, H = 700, 500
 DC = {"x": -60.0, "y": 0.0, "width": 160.0, "height": 80.0}   # x -140..20, y -40..40
 WALL = 6
 
-SCENARIOS = ("open", "corner", "pocket", "narrow")
+SCENARIOS = ("open", "corner", "pocket", "narrow", "hidden")
+# ``hidden`` (Phase 4, B3): the center at the end of a corridor, out of sight.
+HIDDEN_DC = {"x": -200.0, "y": -175.0, "width": 160.0, "height": 70.0}
 NARROW_GAP = 30.0          # px; narrower than a carrying drone (Phase 4, Risk A)
 
 BOMBS: Dict[str, List[Tuple[float, float]]] = {
@@ -58,6 +60,7 @@ BOMBS: Dict[str, List[Tuple[float, float]]] = {
     # Phase 4 (Risk A): bombs south of the pocket and west of it.
     "pocket": [(-60.0, -130.0), (60.0, -150.0), (-220.0, -60.0), (120.0, 140.0)],
     "narrow": [(-60.0, -130.0), (120.0, -120.0), (-220.0, -60.0), (60.0, 160.0)],
+    "hidden": [(150.0, 120.0), (60.0, -150.0), (250.0, -100.0), (-50.0, 160.0)],
 }
 
 
@@ -107,14 +110,30 @@ def fixture(scenario: str, max_steps: int = 3000) -> dict:
             mid = DC["x"]
             _hwall(walls, yn, x0 - 8.0, mid - NARROW_GAP / 2 - WALL / 2)
             _hwall(walls, yn, mid + NARROW_GAP / 2 + WALL / 2, x1 + 30.0)
+    dc, start = dict(DC), [-60.0, 120.0]
+    if scenario == "hidden":
+        # Center walled on west, south and east (2 px gaps); its north face
+        # is reachable only through a 70 px corridor 150 px long. The start
+        # area lies in the opposite corner, out of sight.
+        dc, start = dict(HIDDEN_DC), [230.0, 170.0]
+        x0, x1 = dc["x"] - dc["width"] / 2, dc["x"] + dc["width"] / 2
+        y0, y1 = dc["y"] - dc["height"] / 2, dc["y"] + dc["height"] / 2
+        _vwall(walls, x0 - 5.0, y0 - 8.0, y1 + 5.0)
+        _hwall(walls, y0 - 5.0, x0 - 8.0, x1 + 8.0)
+        _vwall(walls, x1 + 5.0, y0 - 8.0, y1 + 5.0)
+        cx, half = dc["x"], 35.0 + WALL / 2
+        _hwall(walls, y1 + 5.0, x0 - 8.0, cx - half)
+        _hwall(walls, y1 + 5.0, cx + half, x1 + 8.0)
+        _vwall(walls, cx - half, y1 + 5.0, y1 + 150.0)
+        _vwall(walls, cx + half, y1 + 5.0, y1 + 150.0)
     boundary = np.zeros_like(walls)
     boundary[:WALL, :] = boundary[-WALL:, :] = 1
     boundary[:, :WALL] = boundary[:, -WALL:] = 1
     return {"map": f"Delivery-{scenario}", "walls": walls, "boundary": boundary,
             "obstacle_render": walls, "starts": np.zeros((0, 2)),
             "size_area": [W, H], "max_timestep_limit": max_steps,
-            "max_walltime_limit": 600, "disposal_center": dict(DC),
-            "start_area": [-60.0, 120.0], "default_drones": 4}
+            "max_walltime_limit": 600, "disposal_center": dc,
+            "start_area": start, "default_drones": 4}
 
 
 def brain_class(agent: str):
