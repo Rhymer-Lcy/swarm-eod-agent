@@ -11,7 +11,10 @@ B1 and R1 after paired comparisons and kept the Phase 1 agents as a frozen
 comparator; see [PHASE2_REPORT.md](PHASE2_REPORT.md). Phase 3 (2026-10-14)
 fixed delivery to partly walled disposal centers (B2) and red placement (R2),
 again against frozen comparators; see [PHASE3_REPORT.md](PHASE3_REPORT.md)
-for the status and limits.
+for the status and limits. Phase 4 (2026-10-14) validated the frozen B2 and
+R2 on new layouts and synthetic custom geometry, found a hidden-center
+failure, rejected the candidate B3 under its preregistered rule and kept B2
+and R2; see [PHASE4_REPORT.md](PHASE4_REPORT.md).
 
 The baseline's own `README.md`, `INSTALL.md` and `doc/` (Chinese participant
 guides) are kept verbatim and remain authoritative for the simulator and the
@@ -36,6 +39,8 @@ submission interface.
 | [PHASE2_REPORT.md](PHASE2_REPORT.md) | Phase 2 completion report: estimator fix, B1 and R1, parity, budget, generalization, open defects |
 | [PHASE3_PLAN.md](PHASE3_PLAN.md) | Phase 3 evaluation plan, frozen before its first round, with dated addenda |
 | [PHASE3_REPORT.md](PHASE3_REPORT.md) | Phase 3 completion report: Map03 delivery root cause, B2, red diagnosis and R2, budget, limits |
+| [PHASE4_PLAN.md](PHASE4_PLAN.md) | Phase 4 validation protocol (partitions, custom-geometry scenarios, budget, decision rules), frozen before evaluation, with dated addenda |
+| [PHASE4_REPORT.md](PHASE4_REPORT.md) | Phase 4 completion report: generalization results, Risks A-C, the B3 decision, reproducibility, limits |
 
 ## Repository layout
 
@@ -51,7 +56,9 @@ submission interface.
 ├── scripts/, *.sh        official checker and packaging scripts
 ├── docs/                 this project's documentation (English)
 ├── devtools/             project tooling: hygiene scanner, review packages, OpenGL probe, tests
-│   └── simlab/           simulation harness, probes, fixtures, offline approximation
+│   ├── simlab/           simulation harness, probes, fixtures, offline approximation,
+│   │                     Phase 4 custom-geometry scenarios (p4_scenarios.py)
+│   └── comparators/      frozen agent packages (B0.1/R0.1, B1/R1, B2/R2, B3)
 ├── environments/         conda specification and resolved package locks
 ├── _local/               ignored: original archives, private notes, logs, runs
 └── _review_packages/     ignored: generated review ZIPs
