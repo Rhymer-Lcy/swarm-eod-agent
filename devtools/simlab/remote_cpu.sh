@@ -20,6 +20,26 @@ set -euo pipefail
 : "${CPUSET:?set CPUSET to a CPU list on NUMA node 0}"
 : "${PYTHON:?set PYTHON to the project environment interpreter}"
 
+# Refuse, before pinning anything (the wrapper re-runs itself under taskset
+# below), a CPU list that is not entirely on NUMA node 0. Until Phase 4 the
+# check ran only inside the gate, after the re-run, so a mistaken list put
+# the wrapper and the gate on the wrong node for about a second.
+_expand_cpus() {
+    local part out=""
+    for part in ${1//,/ }; do
+        if [[ "$part" == *-* ]]; then out="$out $(seq "${part%-*}" "${part#*-}")"; else out="$out $part"; fi
+    done
+    echo $out
+}
+if [ -z "${_NODE0_CHECKED:-}" ]; then
+    node0=$(cat /sys/devices/system/node/node0/cpulist 2>/dev/null || true)
+    [ -n "$node0" ] || { echo "REFUSED: NUMA node 0 CPU list unknown" >&2; exit 75; }
+    allowed=" $(_expand_cpus "$node0") "
+    for c in $(_expand_cpus "$CPUSET"); do
+        case "$allowed" in *" $c "*) ;; *) echo "REFUSED: CPU $c is not on NUMA node 0" >&2; exit 75 ;; esac
+    done
+    export _NODE0_CHECKED=1
+fi
 # Re-run this wrapper itself pinned, so that the gate and every helper
 # process stay on the permitted CPUs as well, not only the command.
 if [ -z "${_REMOTE_CPU_PINNED:-}" ]; then
