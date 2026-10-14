@@ -212,3 +212,36 @@ ones. Order: stage 1 in the table order; stage 2 only after an addendum.
 * No round beyond 24, no sweeps, no parallel rounds, no background jobs.
 
 ## Addenda
+
+### Addendum 1 (2026-10-14, before any agent ran on a template scenario; 0 rounds)
+
+* **Scenario registry.** Generated at `9c1a7bb` (`p4_scenarios.py --list`);
+  SHA-256 of the canonical specification JSON, first 12 hex digits:
+
+  | Family | C-probe (V1) | C-final (V2) | C-reserve (V3) |
+  |---|---|---|---|
+  | pocket | `5d42bd9c60fe` | `9490c57bd15b` | `a7dbe516a367` |
+  | corridor | `5febb44d59d5` | `199238591c58` | `6af90d52fdb6` |
+  | gpsdark | `6da4c15799e9` | `8f78e758081d` | `dfc87c3b1748` |
+  | comdark | `b7c465c55cec` | `83c9e22f5d88` | `b54b5080a4f9` |
+  | clutter | `3e95e71d95ea` | `63fe2b26347c` | `37f348e1b87b` |
+  | rooms | `e5d0ee04c9df` | `1dbdc3161c5a` | `d3141d3a5334` |
+  | mixed | `6c33344971bb` | `bdbc9cf1c145` | `58dc38e62d68` |
+
+* **Fixtures** (P4-A003): the framework's rasterization of the 14 C-probe and
+  C-final scenarios agrees with the specifications: every wall pixel of
+  either raster lies within 2 px of the other (the framework draws walls
+  about 1 px thicker than the nominal 6 px) and every box is solid
+  (`test_p4_scenarios_gl.py`, 15 passed; a planted mis-oriented box fails
+  by 141 px). The first version of that test used an overlap ratio above
+  0.95, which thin walls drawn 1 px thicker cannot meet (0.89-0.97); it was
+  replaced before any result depended on it.
+* **Layouts** (P4-A004, `layouts.py`, 10 bombs), SHA-256 first 12 hex digits:
+  Map02 wall s101 `36b999da78e0`; Map04 cluster s102 `dd8aa93ae47f`; Map05
+  far s103 `4599fee97dea`; P4PocketV1 uniform s111 `f09a0bfce0b4`;
+  P4CorridorV1 uniform s112 `395f6b52f75e`; P4GpsdarkV1 uniform s113
+  `bdebba9f3e51`; P4ComdarkV1 uniform s114 `cc41b9d69dc4`; P4ClutterV1 wall
+  s115 `cb7dacb270f8`; stage 2 only: Map03 uniform s121 `e3f3dde02520`;
+  P4PocketV2 uniform s211 `932fabf8ecf7`; P4CorridorV2 uniform s212
+  `f64f4dcb574c`; P4ClutterV2 uniform s213 `336e44d420f9`. All twelve were
+  generated in one batch; none was regenerated.
