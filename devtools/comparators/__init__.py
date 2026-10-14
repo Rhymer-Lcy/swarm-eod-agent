@@ -14,6 +14,11 @@ Git history. A comparator is selected in the runner with
   ``ddc6897``.
 * ``p2_540054b``: B1 (blue) and R1 (red), the Phase 2 candidates at
   ``540054b``.
+* ``p3_067818a``: B2 (blue) and R2 (red), adopted in Phase 3, at the
+  Phase 3 final commit ``067818a`` (the blue files are identical to those of
+  the Phase 3 blue rounds at ``bb569c3``, the whole package to the R2 freeze
+  at ``5e0803d``). Frozen for Phase 4; any later change is a new candidate
+  with a new identifier.
 
 Nothing under ``solutions/`` may import this package.
 """
