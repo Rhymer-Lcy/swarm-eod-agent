@@ -245,3 +245,74 @@ ones. Order: stage 1 in the table order; stage 2 only after an addendum.
   P4PocketV2 uniform s211 `932fabf8ecf7`; P4CorridorV2 uniform s212
   `f64f4dcb574c`; P4ClutterV2 uniform s213 `336e44d420f9`. All twelve were
   generated in one batch; none was regenerated.
+
+### Addendum 2 (2026-10-14, after stage 1: 14 of 24 rounds; before any stage-2 round)
+
+* **Stage 1** (rounds 1-14, all at `3021c95`, B2/R2 as `official`; per-round
+  values in EXPERIMENTS.md section 9). Blue: 10 of 10 bombs in 7 of 8
+  instrumented rounds (Map02, Map04, Map05; P4PocketV1, P4GpsdarkV1,
+  P4ComdarkV1, P4ClutterV1); **P4CorridorV1: 0 of 10** at the step limit.
+  Red: maps submitted and 10 bombs placed in all rounds; wall 95.66 (Map02),
+  51.91 (P4RoomsV1), 70.73 (P4MixedV1). V-N1 (native) equals V-C1 and V-N2
+  (native) and V-D1 (repeat) equal V-R2 in every recorded value. No crash,
+  brain error, wall-clock limit or lost drone.
+* **Confirmed defect (blue).** In V-C2 every drone grasped one bomb, all ten
+  ended in the carry state and none had recorded a single surface point of
+  the center (agent reports). Mechanism (`blue.py`, `_carry`): a carrier that
+  does not know the center drives straight at its start area (no path) and
+  waits; blue does not explore while carrying, so when all drones carry
+  before anyone has seen a hidden center, nobody searches for it. Reproduced
+  offline (P4-A014, seed 1: 0 of 10, no drone ever knew the center).
+  Environment ruled out: the corridor (82 px) is wider than the planner's
+  closure threshold for ideal walls (56-62 px, P4-A016) and other runs
+  passed it. Relevance: on the five supplied maps the center is in view of
+  the start area, so the defect cannot occur there; on a map where it is not
+  and bombs are at least as many as drones it can lose every bomb.
+* **B3** (agent code at `ce09cb7`; only `blue.py` differs from B2): a carrier
+  without a known center searches for it with the unloaded drones' target
+  choice along planned paths, and with nothing left to search follows a
+  planned path home (`_seek_center`). Behaviour with a known center is
+  unchanged (command-identical closed-loop test). Tests:
+  `test_b3_seek_center.py` (frozen B2 fails the hidden-center case, B3
+  delivers; a planted return of B2's behaviour fails the test).
+* **Development evidence for B3 (offline, C-probe and development maps,
+  P4-A018 against P4-A014, same seeds; not stage-2 evidence).** P4CorridorV1
+  seeds 1 and 2: B3 6 and 4 of 10, B2 0 and 10 of 10 (total 10 of 20 each);
+  P4PocketV1: both 10 of 10, B3 at steps 1387/1432 against 2111/2357;
+  P4ClutterV1: both 10 of 10, 2409/1337 against 2006/1748; P4GpsdarkV1,
+  P4ComdarkV1, Map03 s1, Map01 s1: identical outcomes. The development
+  evidence is mixed: B3 removes the total deadlock but lost corridor seed 2,
+  where its carriers, after finding the center, had no route to it (351
+  fallback fields). A second limitation explains such runs and is **not**
+  addressed: the planner's 24 px obstacle inflation on 8 px cells closes
+  passages below 56-62 px between ideal walls and, in maps drawn under pose
+  error, wider ones (a 70 px corridor in the `hidden` fixture, P4-A016).
+  B3 is evaluated as frozen; no further iteration is made in Phase 4.
+* **Risk A** (radial fallback): unchecked goals can lie on a blocked side
+  and, with a complete map and no witness, deadlock a carrier offline
+  (`test_p4_risk_a.py`); the terminal push never moved through a wall. In
+  rounds the fallback was transient (G-4 of Phase 3; stage 1). No separate
+  successor: B3's change does not touch it.
+* **Risk B** (R2 solid inference, P4-A013): precision 0.47-0.48 on P4RoomsV1
+  with 94-99 % of the false area in sealed rooms, 0.98 on Map04; the
+  whole-run effect on the wall score was +21.2 on Map04 and -0.5, +5.2, 0.0
+  and -10.0 on the synthetic rooms and mixed maps (the last with one changed
+  decision, which scored higher against the truth). No consistent harm is
+  shown; **no red successor**; R2 stays frozen.
+* **Stage 2** (8 starts, instrumented, frozen arm first in each pair; B2 as
+  `devtools.comparators.p3_067818a.shell:EodRescueDrone`, B3 as `official`,
+  all at the commit that adds this addendum):
+
+  | Id | Arms | Scenario | Layout | Seed |
+  |---|---|---|---|---|
+  | S2-1 | B2, B3 | P4CorridorV2 (C-final) | uniform s212 | 611 |
+  | S2-2 | B2, B3 | P4PocketV2 (C-final) | uniform s211 | 612 |
+  | S2-3 | B2, B3 | Map03 (regression, partition B) | uniform s121 | 431 |
+  | S2-4 | R2 | P4RoomsV2 (C-final) | | 521 |
+  | S2-5 | R2 | P4MixedV2 (C-final) | | 522 |
+
+  B3 is adopted only under section 8 (no fewer bombs than B2 in any pair,
+  more in total, regression pair at least B2's bombs and score minus 3, no
+  crash or brain error, median steps per second at least 0.9 of B2's);
+  otherwise B2 is retained and `blue.py` returns to B2's bytes. P4ClutterV2
+  and the C-reserve scenarios are not run. Two starts stay unused.
