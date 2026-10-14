@@ -71,9 +71,9 @@ def test_comparator_files_match_git_history(manifest: Path):
 
 
 # Files of solutions/eod that may differ from the frozen B2/R2 package, with
-# the candidate they carry. Empty since the end of Phase 4: the candidate B3
-# was not adopted and blue.py is B2 again (B3 is kept as p4_ce09cb7).
-CANDIDATE_FILES: dict = {}
+# the candidate they carry. Phase 4 ended with none (B3 not adopted, kept as
+# p4_ce09cb7); Phase 5 introduces the blue candidate B4-S in blue.py only.
+CANDIDATE_FILES: dict = {"blue.py": "B4-S"}
 
 
 def test_submitted_agent_is_the_frozen_b2_r2_except_named_candidates():
@@ -121,7 +121,9 @@ def test_comparator_is_importable_and_isolated():
     from devtools.comparators.p4_ce09cb7 import blue as b3_blue
     assert hasattr(b3_blue.RescueBrain, "_seek_center")
     assert b3_blue.BrainBase.__module__ == "devtools.comparators.p4_ce09cb7.base"
-    assert not hasattr(current_blue.RescueBrain, "_seek_center")  # solutions/ is B2 again
+    assert not hasattr(current_blue.RescueBrain, "_seek_center")  # solutions/ is not B3
+    assert hasattr(current_blue.RescueBrain, "_verified_approach")  # it is B4-S
+    assert not hasattr(b2_blue.RescueBrain, "_verified_approach")
     assert b2_blue.ApproachSet is b2_delivery.ApproachSet
     assert b2_delivery.ApproachSet is not current_delivery.ApproachSet
     assert r2_red.PlaceBrain is not current_red.PlaceBrain

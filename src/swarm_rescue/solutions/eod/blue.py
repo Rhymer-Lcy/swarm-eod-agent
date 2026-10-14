@@ -1,4 +1,15 @@
-"""Blue (rescue) brain, candidate B2 (B1 in Phase 2, B0 and B0.1 in Phase 1).
+"""Blue (rescue) brain, candidate B4-S (B2 in Phase 3, B1 in Phase 2, B0 and B0.1 in Phase 1).
+
+B4-S (Phase 5) differs from B2 (frozen as the package ``p3_067818a``) in two
+places. (1) Where B2's carrier has no exit, B4-S looks for one: with the
+center unknown it searches for it along planned paths instead of waiting at
+its start area; with the center known but no verified approach, when B2's
+goals are unreachable or an approach on them failed, it visits view positions
+around the known box for a while, excluding those from which no face was seen,
+and then returns to B2's goals. Everywhere else the delivery is B2's
+(``_carry``, ``_seek``). (2) A drone fetching a bomb keeps its grasper off
+near a bomb another drone holds (``_grasp_guard``). (3) A teammate's center
+box is accepted only when finite and well ordered.
 
 Every drone runs the same decentralised policy:
 
@@ -32,8 +43,8 @@ Every drone runs the same decentralised policy:
   they do not block deliveries.
 
 Missing sensors, missing messages or an unknown disposal center degrade the
-behaviour (dead reckoning, local decisions, return towards the start area)
-instead of stopping it.
+behaviour (dead reckoning, local decisions, seeking the center while carrying,
+then the start area along planned paths) instead of stopping it.
 """
 
 from __future__ import annotations
@@ -41,12 +52,14 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
+import cv2
 import numpy as np
 
 from . import params as P
-from .base import BrainBase
+from .base import TARGET_BUDGET_MAX, TARGET_BUDGET_MIN, BrainBase
 from .comms import make_message, numeric_tuple, valid_messages
-from .delivery import ApproachSet, radial_sources
+from .delivery import (MAX_PENALTIES, PENALTY_RADIUS, PENALTY_STEPS, STANDOFF, SURFACE_STOP,
+                       ApproachSet, radial_sources, segments_clear)
 from .geometry import wrap
 from .motion import LocalView, drive, lookahead_point, rotation_toward
 from .observation import Command, Observation
@@ -72,6 +85,24 @@ PROGRESS_EPS = 5.0         # px of distance gain that count as progress
 PROGRESS_MOVE = 80.0       # a drone that moved this far is travelling, not stuck
 IDLE_DC_CLEARANCE = 130.0  # idle drones wait at least this far from the center
 IDLE_PERIOD = 100
+# Approach seeking (B4-S, Phase 5): a carrier without a verified approach looks
+# for one instead of waiting. Every value is derived from an existing constant.
+SEEK_VIEW_OFFSET = 2.0 * STANDOFF          # 72 px out from a face: beyond the stand-off ring, well
+                                           # inside LIVE_AIM_RANGE, so a visible face gives live points
+SEEK_VIEW_SPACING = SEEK_VIEW_OFFSET       # a face seen from that distance spans about twice it
+SEEK_ARRIVE = 30.0                         # reached, as for exploration targets (base._explore_due)
+SEEK_MARK_RADIUS = PENALTY_RADIUS          # a view or search goal that failed is excluded like a
+SEEK_MARK_STEPS = PENALTY_STEPS            # failed approach (delivery.py)
+SEEK_MAX_MARKS = MAX_PENALTIES
+SEEK_BUDGET_MIN = TARGET_BUDGET_MIN        # travel-time budget: unloaded bounds rescaled to the
+SEEK_BUDGET_MAX = int(TARGET_BUDGET_MAX * P.MAX_SPEED / P.CARRY_SPEED)   # carrying speed
+SEEK_RECHECK = DC_FIELD_PERIOD             # steps before seeking again when nothing was left
+ESCAPE_STEPS = PENALTY_STEPS               # view seeking after B2's goals gave no exit, then B2 again
+SEEK_CHECK_PERIOD = 10                     # steps between re-evaluations of the verified approach
+MIN_OWN_POINTS = 4                         # own points before an own box exists (perception.bbox)
+GRASP_GUARD_BOMB = P.GRASP_REACH + 2.0 * P.BOMB_RADIUS   # a held bomb's centre this close is reachable
+GRASP_GUARD_CARRIER = (P.GRASP_REACH + P.CARRY_OFFSET + P.BOMB_RADIUS
+                       + 2.0 * P.GPS_NOISE)              # a carrier's reported position, GPS error added
 
 
 class Bomb:
@@ -159,10 +190,26 @@ class RescueBrain(BrainBase):
         # Progress watch near the center: best distance, its step and position.
         self.progress: Optional[Tuple[float, int, float, float]] = None
         self._idle_spot: Optional[Tuple[int, Tuple[float, float]]] = None
+        # B4-S approach seeking: current goal, its kind ("view" around a known box or
+        # "search" for an unknown center), when it was chosen, its travel budget, the
+        # last step a center surface was in sight, failed goals (bounded), and when
+        # seeking may resume after nothing was left to seek.
+        self._seek_goal: Optional[Tuple[float, float]] = None
+        self._seek_kind = ""
+        self._seek_step = -10_000
+        self._seek_budget = 0
+        self._seen_dc_step = -10_000
+        self._seek_marks: List[Tuple[float, float, int]] = []
+        self._seek_resume = -1
+        self._escape_until = -1      # view seeking replaces B2's unverified goals until then
+        self._verified: Optional[Tuple[int, int, int, bool]] = None   # step, witnesses, version, result
         self.diag.update({"grasps": 0, "disposed": 0, "drops": 0, "grasp_timeouts": 0,
                           "claims": 0, "yields": 0, "live_aims": 0, "witness_aims": 0,
                           "approach_failures": 0, "relaxed_sources": 0,
-                          "radial_fallbacks": 0, "terminal_blocked": 0})
+                          "radial_fallbacks": 0, "terminal_blocked": 0,
+                          "seek_goals": 0, "seek_steps": 0, "seek_views_empty": 0,
+                          "seek_expired": 0, "seek_exhausted": 0, "escapes": 0,
+                          "grasp_guards": 0})
 
     # ------------------------------------------------------------------ API
     def step(self, obs: Observation) -> Command:
@@ -223,7 +270,11 @@ class RescueBrain(BrainBase):
                         self.claims[int(item[0])] = (float(item[1]), float(item[2]),
                                                      float(item[3]), int(item[4]))
             box = msg.get("dc")
-            if isinstance(box, tuple) and len(box) == 4 and self.dc.box is None:
+            # B4-S: only a finite, well-ordered box is accepted (B2 accepted any
+            # 4-tuple; a non-finite one made the center "known" and later failed
+            # in planning on every step).
+            if numeric_tuple(box, 4) and box[0] < box[2] and box[1] < box[3] \
+                    and self.dc.box is None:
                 self.dc.shared_box = tuple(float(v) for v in box)
             for item in msg.get("dp", ()):
                 if item in self._digest_seen or not numeric_tuple(item, 3):
@@ -339,6 +390,7 @@ class RescueBrain(BrainBase):
         self.claim = None
         self.path = []
         self.progress = None
+        self._seek_goal = None       # a new carry starts without a stale seek goal
 
     def _on_release(self, obs: Observation) -> None:
         a = self.est.heading + self.grasp_side
@@ -441,7 +493,7 @@ class RescueBrain(BrainBase):
             cmd.rotation = rotation_toward(est.heading, bearing_world)
             facing = abs(det.bearing) < 0.35
             cruise = (2.5 if dist < 60.0 else 6.0) if facing else 1.0
-            cmd.grasper = 1 if dist < 90.0 else 0
+            cmd.grasper = 1 if dist < 90.0 and not self._grasp_guard(obs) else 0
             f, l, _ = drive(est, aim, view, cruise=cruise, carrying=False, others=others,
                             stop_at_target=False, repel_walls=dist > 45.0)
             cmd.forward, cmd.lateral = f, l
@@ -459,27 +511,293 @@ class RescueBrain(BrainBase):
         return cmd
 
     def _carry(self, obs: Observation, view: LocalView, others) -> Command:
+        """Carry the held bomb (B4-S).
+
+        Center known: B2's delivery, unchanged (progress watch, certified
+        terminal push, carry field to verified stand-offs or, without them, to
+        B2's radial goals), except where B2 has no exit. Without a verified
+        approach (``_verified_approach``), if B2's goals cannot be reached
+        (B2 waits at its start area) or an approach on them fails (B2 returns
+        to the same side), the carrier seeks a view of a face for
+        ``ESCAPE_STEPS`` (``_seek``) and then tries B2's goals again; a face in
+        sight allows a certified terminal push meanwhile. Center unknown: B2
+        drove straight to its start area and waited; B4-S searches for the
+        center (``_seek``) and, with nothing left to search, goes to its start
+        area along a planned path and searches again later.
+        """
         est = self.est
         cmd = Command(grasper=1)
-        if not self.dc.known:
-            self.state = "carry"
-            target = self.home
+        now = obs.step
+        if self.dc_live:
+            self._seen_dc_step = now
+        target = None
+        escape = False
+        tried = False                                   # terminal push already tried this step
+        if self.dc.known:
+            verified = self._verified_approach(now)
+            if verified or now >= self._escape_until:
+                # B2's delivery, unchanged: verified stand-offs, or B2's radial
+                # goals (through unknown cells they draw the carrier round the
+                # walls of a partly known center; Phase 4 Risk A).
+                self._seek_goal = None
+                dist = self.dc.distance(est.x, est.y)
+                failures = self.diag["approach_failures"]
+                self._watch_progress(obs, dist)
+                if dist < DELIVER_RANGE:
+                    tried = True
+                    deliver = self._deliver(obs, view)
+                    if deliver is not None:
+                        return deliver
+                self.state = "carry"
+                target = self._path_target_dc(obs)
+                if not verified and (not self._dc_route() or
+                                     self.diag["approach_failures"] > failures):
+                    # B2 has no exit here: no route to its unverified goals
+                    # (it would wait at its start area), or an approach on
+                    # them failed (it would come back to the same side).
+                    self._escape_until = now + ESCAPE_STEPS
+                    self.diag["escapes"] += 1
+                    escape = True
+            else:
+                escape = True
+            if escape:
+                if not tried and self.dc_live and \
+                        self.dc.distance(est.x, est.y) < DELIVER_RANGE:
+                    deliver = self._deliver(obs, view)  # certified by a live point
+                    if deliver is not None:
+                        return deliver
+                seek = self._seek(obs)
+                if seek is not None:
+                    target = seek
+                elif target is None:                    # nothing to seek: B2's goals
+                    self.state = "carry"
+                    target = self._path_target_dc(obs)
         else:
-            dist = self.dc.distance(est.x, est.y)
-            self._watch_progress(obs, dist)
-            if dist < DELIVER_RANGE:
-                deliver = self._deliver(obs, view)
-                if deliver is not None:
-                    return deliver
-            self.state = "carry"
-            target = self._path_target_dc(obs)
+            target = self._seek(obs)
+            if target is None:                          # nothing left to search (for now)
+                self.state = "carry"
+                target = self._path_target(obs, self.home) if self.home is not None \
+                    else (est.x, est.y)
         heading = math.atan2(target[1] - est.y, target[0] - est.x) - self.grasp_side
         cmd.rotation = rotation_toward(est.heading, heading, gain=0.6)
         f, l, _ = drive(est, target, view, cruise=P.CARRY_SPEED, carrying=True,
                         others=others, stop_at_target=False)
         cmd.forward, cmd.lateral = f, l
-        self.target = target
+        # While seeking, teammates are told the seek goal (spreading), not the
+        # next path point.
+        self.target = self._seek_goal if self._seek_goal is not None else target
         return cmd
+
+    # -- B4-S: grasp guard, verified approach, approach seeking ------------------
+    def _grasp_guard(self, obs: Observation) -> bool:
+        """Keep the grasper off near a bomb that another drone holds.
+
+        The framework lets a second drone grasp a bomb already held (one bomb
+        per drone, but no check of the bomb's holders); the semantic sensor
+        flags a held bomb as grasped for every other drone, and teammates
+        report whether they carry. A drone fetching its own claim therefore
+        does not close its grasper while a held bomb or a carrying teammate is
+        within grasping reach, so it cannot capture a teammate's bomb on the
+        way (Phase 4 S2-2, two drones on one bomb). The guard only delays a
+        grasp; it never changes a claim.
+        """
+        est = self.est
+        held = any(d.grasped and d.range < GRASP_GUARD_BOMB for d in self.detections)
+        if not held:
+            for _, m in self.team.recent(obs.step, 3):
+                if m.carrying and math.hypot(m.x - est.x, m.y - est.y) < GRASP_GUARD_CARRIER:
+                    held = True
+                    break
+        if held:
+            self.diag["grasp_guards"] += 1
+        return held
+
+    def _verified_approach(self, now: int) -> bool:
+        """Whether the carrier holds approach evidence B2's delivery can trust.
+
+        Verified: a supported, unpenalized witnessed stand-off, or, with an
+        own box (at least ``MIN_OWN_POINTS`` own surface points), a radial
+        stand-off that passes the map check and lies outside every penalized
+        area. A teammate's box alone, a handful of own points, or goals that
+        survive only as B2's unchecked fallback are not verified. Re-evaluated
+        every ``SEEK_CHECK_PERIOD`` steps or when the witnesses change.
+        """
+        if not self.dc.known:
+            return False
+        key = (len(self.approach), self.approach.version)
+        cached = self._verified
+        if cached is not None and (cached[1], cached[2]) == key and \
+                now - cached[0] < SEEK_CHECK_PERIOD:
+            return cached[3]
+        ok = bool(self.approach.valid(self.grid, now))
+        if not ok and self.dc.box is not None and len(self.dc.points) >= MIN_OWN_POINTS:
+            ok = self._own_radial_ok(now)
+        self._verified = (now, key[0], key[1], ok)
+        return ok
+
+    def _dc_route(self) -> bool:
+        """Whether B2's current carry field reaches the drone (a route exists)."""
+        field = self._dc_field
+        if field is None:
+            return False
+        return bool(self.planner.descend(field, self.grid.to_cell(self.est.x, self.est.y),
+                                         max_len=1))
+
+    def _own_radial_ok(self, now: int) -> bool:
+        """A map-checked, unpenalized radial stand-off from the own box exists."""
+        box = self.dc.box
+        cx, cy = (box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0
+        pts = np.asarray(self.dc.points[::5], dtype=float)
+        dx, dy = pts[:, 0] - cx, pts[:, 1] - cy
+        norm = np.maximum(np.hypot(dx, dy), 1e-9)
+        sx, sy = pts[:, 0] + 32.0 * dx / norm, pts[:, 1] + 32.0 * dy / norm
+        cells = self.grid._cells(sx, sy)
+        occ = self.grid.occupied().reshape(-1)
+        ok = (cells >= 0) & ~occ[np.maximum(cells, 0)]
+        ok &= segments_clear(self.grid, sx, sy, pts[:, 0], pts[:, 1], stop_short=SURFACE_STOP)
+        ok &= ~self.approach._penalized(sx, sy, now)
+        return bool(ok.any())
+
+    def _seek(self, obs: Observation) -> Optional[Tuple[float, float]]:
+        """Path point towards the current seek goal, or None if nothing is left.
+
+        Center unknown: a reachable unsearched or frontier cell (``search``).
+        Center known from a box but no verified approach: a view position
+        ``SEEK_VIEW_OFFSET`` out from a face of the box (``view``). A goal is
+        kept until reached, until its travel budget (carrying speed) expires
+        or until the kind changes. A view position reached or abandoned
+        without any center surface in sight since it was chosen, and a goal
+        whose budget expired, are excluded for ``SEEK_MARK_STEPS``
+        (negative evidence: walls stop semantic rays, so a face that is not
+        seen from there is not approachable from there). With no candidate
+        left, seeking pauses for ``SEEK_RECHECK`` steps.
+        """
+        now = obs.step
+        est = self.est
+        if now < self._seek_resume:
+            return None
+        kind = "view" if self.dc.known else "search"
+        goal = self._seek_goal
+        if goal is not None:
+            reached = math.hypot(goal[0] - est.x, goal[1] - est.y) < SEEK_ARRIVE
+            expired = now - self._seek_step > self._seek_budget
+            if kind != self._seek_kind or reached or expired:
+                unseen = self._seen_dc_step < self._seek_step
+                if expired:
+                    self.diag["seek_expired"] += 1
+                if (self._seek_kind == "view" and unseen) or expired:
+                    if self._seek_kind == "view" and unseen:
+                        self.diag["seek_views_empty"] += 1
+                    self._mark(goal, now)
+                goal = None
+        if goal is None:
+            choice = self._choose_view(now) if kind == "view" else self._choose_search(now)
+            if choice is None:
+                self._seek_goal = None
+                self._seek_resume = now + SEEK_RECHECK
+                self.diag["seek_exhausted"] += 1
+                return None
+            goal, budget = choice
+            self._seek_goal, self._seek_kind = goal, kind
+            self._seek_step, self._seek_budget = now, budget
+            self.diag["seek_goals"] += 1
+            self.path = []
+        self.state = "seek"
+        self.diag["seek_steps"] += 1
+        return self._path_target(obs, goal)
+
+    def _mark(self, goal: Tuple[float, float], now: int) -> None:
+        marks = [m for m in self._seek_marks if m[2] >= now]
+        marks.append((goal[0], goal[1], now + SEEK_MARK_STEPS))
+        self._seek_marks = marks[-SEEK_MAX_MARKS:]
+
+    def _marked(self, xs: np.ndarray, ys: np.ndarray, now: int) -> np.ndarray:
+        out = np.zeros(xs.shape, dtype=bool)
+        for mx, my, until in self._seek_marks:
+            if until >= now:
+                out |= (xs - mx) ** 2 + (ys - my) ** 2 < SEEK_MARK_RADIUS ** 2
+        return out
+
+    def _seek_budget_for(self, cost_px: float) -> int:
+        travel = cost_px / (0.5 * P.CARRY_SPEED)
+        return int(min(SEEK_BUDGET_MAX, max(SEEK_BUDGET_MIN, travel + 40)))
+
+    def _choose_view(self, now: int) -> Optional[Tuple[Tuple[float, float], int]]:
+        """Cheapest reachable view position around the known box (deterministic)."""
+        box = self.dc.bbox()
+        x0, y0, x1, y1 = box
+        off, step = SEEK_VIEW_OFFSET, SEEK_VIEW_SPACING
+        pts = []
+        for x in np.arange(x0, x1 + 1e-6, step).tolist() + [x1]:
+            pts += [(x, y1 + off), (x, y0 - off)]
+        for y in np.arange(y0, y1 + 1e-6, step).tolist() + [y1]:
+            pts += [(x1 + off, y), (x0 - off, y)]
+        d = off / math.sqrt(2.0)
+        pts += [(x0 - d, y0 - d), (x0 - d, y1 + d), (x1 + d, y0 - d), (x1 + d, y1 + d)]
+        arr = np.unique(np.round(np.array(pts), 1), axis=0)
+        g = self.grid
+        inside = (np.abs(arr[:, 0]) < g.width / 2.0 - g.cell) & \
+            (np.abs(arr[:, 1]) < g.height / 2.0 - g.cell)
+        arr = arr[inside]
+        if not arr.size:
+            return None
+        cells = g._cells(arr[:, 0], arr[:, 1])
+        cost = self.planner.cost(True, now, CARRY_UNKNOWN_COST).reshape(-1)
+        ok = (cells >= 0) & (cost[np.maximum(cells, 0)] > 0)
+        ok &= ~self._marked(arr[:, 0], arr[:, 1], now)
+        ok &= ~self.approach._penalized(arr[:, 0], arr[:, 1], now)
+        arr, cells = arr[ok], cells[ok]
+        if not arr.size:
+            return None
+        field = self.planner.field([g.to_cell(self.est.x, self.est.y)], allow_unknown=True,
+                                   step=now, unknown_cost=CARRY_UNKNOWN_COST).reshape(-1)
+        reach = np.isfinite(field[cells])
+        arr, cells = arr[reach], cells[reach]
+        if not arr.size:
+            return None
+        score = field[cells] * g.cell
+        for _, tgt in self.team.targets(now):
+            dd = np.hypot(arr[:, 0] - tgt[0], arr[:, 1] - tgt[1])
+            score = score + np.where(dd < 2.0 * SEEK_VIEW_OFFSET, 2.0 * SEEK_VIEW_OFFSET - dd, 0.0)
+        order = np.lexsort((arr[:, 1], arr[:, 0], score))    # ties: lower x, then lower y
+        i = int(order[0])
+        return (float(arr[i, 0]), float(arr[i, 1])), self._seek_budget_for(float(field[cells[i]] * g.cell))
+
+    def _choose_search(self, now: int) -> Optional[Tuple[Tuple[float, float], int]]:
+        """Reachable unsearched or frontier cell for a carrier without a center.
+
+        The candidate set and score are those of the unloaded exploration
+        (``BrainBase._choose_explore_target``: geodesic cost, unsearched
+        density, teammates' targets and positions), without the start-up
+        sector bias and with failed goals excluded.
+        """
+        g = self.grid
+        searched = self.searched
+        candidates = (g.free() & ~searched) | g.frontier()
+        if not candidates.any():
+            return None
+        field = self._field_from_me(now)
+        reach = np.isfinite(field) & candidates
+        if not reach.any():
+            return None
+        rows, cols = np.nonzero(reach)
+        wx = (cols + 0.5) * g.cell - g.width / 2.0
+        wy = g.height / 2.0 - (rows + 0.5) * g.cell
+        keep = ~self._marked(wx, wy, now)
+        if not keep.any():
+            return None
+        rows, cols, wx, wy = rows[keep], cols[keep], wx[keep], wy[keep]
+        density = cv2.blur((~searched).astype(np.float32), (7, 7))
+        score = field[rows, cols] * g.cell - 120.0 * density[rows, cols]
+        for _, tgt in self.team.targets(now):
+            d = np.hypot(wx - tgt[0], wy - tgt[1])
+            score += np.where(d < 220.0, (220.0 - d) * 2.0, 0.0)
+        for _, (ox, oy, t, _) in self.fleet.items():
+            if now - t < 30:
+                d = np.hypot(wx - ox, wy - oy)
+                score += np.where(d < 150.0, 150.0 - d, 0.0)
+        i = int(np.argmin(score))                              # ties: first in row-major order
+        return (float(wx[i]), float(wy[i])), self._seek_budget_for(float(field[rows[i], cols[i]] * g.cell))
 
     def _watch_progress(self, obs: Observation, dist: float) -> None:
         """Re-plan when a carrier near the center stops getting closer.
