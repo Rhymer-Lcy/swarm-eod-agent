@@ -316,3 +316,37 @@ ones. Order: stage 1 in the table order; stage 2 only after an addendum.
   crash or brain error, median steps per second at least 0.9 of B2's);
   otherwise B2 is retained and `blue.py` returns to B2's bytes. P4ClutterV2
   and the C-reserve scenarios are not run. Two starts stay unused.
+
+### Addendum 3 (2026-10-14, after stage 2: 22 of 24 rounds)
+
+* **Stage 2** (rounds 15-22, all at `46413ac`):
+
+  | Pair | Scenario (seed) | B2 bombs, step, score | B3 bombs, step, score |
+  |---|---|---|---|
+  | S2-1 | P4CorridorV2 (611) | 0/10, 5000, 19.60 | 6/10, 5000, 54.64 |
+  | S2-2 | P4PocketV2 (612) | 10/10, 1746, 99.32 | 9/10, 5000, 67.68 (health 68.4) |
+  | S2-3 | Map03 s121 (431) | 10/10, 1002, 99.68 | 10/10, 1002, 99.68 (identical) |
+
+  Red, frozen R2: P4RoomsV2 (521) map 94.35, wall 67.54, partial 70.68;
+  P4MixedV2 (522) map 93.76, wall 71.03, partial 71.09; both submitted at
+  step 2350 with 10 bombs placed.
+* **Blue decision (section 8).** B3 disposed more bombs in total (25 against
+  20) but fewer than B2 in pair S2-2, so rule 1 fails; rules 2-4 held
+  (regression pair identical; no crash, brain error or wall-clock limit;
+  median 71.9 against 74.1 steps per second, ratio 0.97). **B2 is retained.**
+  `blue.py` is B2 again at `4fe480b` (`solutions/` byte-identical to
+  `067818a`); B3 is kept as the frozen package
+  `devtools/comparators/p4_ce09cb7` for its tests. With three pairs
+  (differences +6, -1, 0) nothing is statistically supported either way.
+* **S2-2 (B3)**: one bomb was still carried at the step limit; the round
+  logged 43 approach failures and 9066 blocked terminal pushes, mean health
+  fell to 68.4, and one bomb was disposed while two drones held it (reward
+  split 0.5/0.5). Not diagnosed further: no further iteration is allowed in
+  Phase 4.
+* **Accounting.** That shared disposal made `carry_episodes.py` count 10
+  logged disposals against an official 9; its reconciliation reported the
+  round as inconsistent instead of forcing it. Logged disposals are now the
+  summed reward gains (`1c0d938`), and all 14 Phase 4 blue rounds with a
+  truth log reconcile (the native round V-N1 has none by design).
+* **Budget.** 22 of 24 starts used, none failed, interrupted or started
+  from a dirty tree; two unused.
