@@ -85,7 +85,9 @@ class OfflineWorld:
                  bombs: Sequence[Sequence[float]] = (), bombs_per_drone: int = 2,
                  max_steps: Optional[int] = None,
                  gps_off: Optional[Callable[[int, int], bool]] = None,
-                 carry_ratio_sigma: float = 0.0) -> None:
+                 carry_ratio_sigma: float = 0.0,
+                 compass_off: Optional[Callable[[int, int], bool]] = None,
+                 com_off: Optional[Callable[[int, int], bool]] = None) -> None:
         self.rng = np.random.default_rng(seed)
         # Per-step spread of the carried rotation ratio (0: the median only).
         self.carry_ratio_sigma = float(carry_ratio_sigma)
@@ -117,6 +119,12 @@ class OfflineWorld:
         self.submitted: Optional[np.ndarray] = None
         self.submit_step: Optional[int] = None
         self.gps_off = gps_off
+        # Phase 4 disabler zones: ``compass_off`` (the framework's no-GPS zone
+        # disables GPS and compass together) and ``com_off`` (a drone inside a
+        # no-communication zone neither sends nor receives). Both default to
+        # None, which leaves the earlier behaviour unchanged.
+        self.compass_off = compass_off
+        self.com_off = com_off
         self.lidar_angles = np.linspace(-math.pi, math.pi, P.LIDAR_RAYS)
         self.sem_angles = np.linspace(-math.pi, math.pi, SEMANTIC_RAYS)
         self.contacts = 0
@@ -190,6 +198,8 @@ class OfflineWorld:
         gps = None if gps_disabled else (d.x + d.gps_noise[0], d.y + d.gps_noise[1])
         compass = math.atan2(math.sin(d.heading + d.compass_noise),
                              math.cos(d.heading + d.compass_noise))
+        if self.compass_off is not None and self.compass_off(d.ident, self.step_index):
+            compass = None
         dx, dy = d.x - d.prev_x, d.y - d.prev_y
         dist_travel = math.hypot(dx, dy) + rng.normal(0, 0.2)
         alpha = math.atan2(dy, dx) - d.prev_heading + rng.normal(0, math.radians(8))
@@ -402,11 +412,13 @@ class OfflineWorld:
         self._drone_contacts()
         self._drift()
         self.inbox = [[] for _ in range(self.n)]
+        muted = [self.com_off is not None and self.com_off(d.ident, self.step_index)
+                 for d in self.drones]
         for sender, msg in zip(self.drones, outgoing):
-            if msg is None or sender.removed:
+            if msg is None or sender.removed or muted[sender.ident]:
                 continue
             for rec in self.drones:
-                if rec.ident != sender.ident and not rec.removed and \
+                if rec.ident != sender.ident and not rec.removed and not muted[rec.ident] and \
                         math.hypot(rec.x - sender.x, rec.y - sender.y) < P.COMM_RANGE:
                     self.inbox[rec.ident].append(msg)
         self.step_index += 1

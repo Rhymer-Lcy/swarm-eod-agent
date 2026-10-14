@@ -104,6 +104,36 @@ def make_factory(role: str, fx: dict, n: int, timings: list, agent: str = "curre
     return factory
 
 
+def zone_hooks(fx: dict, holder: list) -> dict:
+    """``OfflineWorld`` keyword arguments for a fixture's disabler zones.
+
+    A no-GPS zone disables GPS and compass, a no-communication zone the
+    radio, for a drone whose true centre lies inside the zone rectangle (the
+    framework's zones act on contact with the drone's body; the centre test
+    is the approximation used offline). ``holder`` receives the world once it
+    exists. Fixtures without zones give no hooks.
+    """
+    zones = fx.get("zones") or []
+    if not zones:
+        return {}
+
+    def inside(kind):
+        rects = [(z["x"] - z["width"] / 2, z["y"] - z["height"] / 2,
+                  z["x"] + z["width"] / 2, z["y"] + z["height"] / 2)
+                 for z in zones if z["type"] == kind]
+        if not rects:
+            return None
+
+        def pred(ident: int, _step: int) -> bool:
+            d = holder[0].drones[ident]
+            return any(x0 <= d.x <= x1 and y0 <= d.y <= y1 for x0, y0, x1, y1 in rects)
+        return pred
+
+    gps = inside("no_gps")
+    hooks = {"gps_off": gps, "compass_off": gps, "com_off": inside("no_com")}
+    return {k: v for k, v in hooks.items() if v is not None}
+
+
 def red_scores(fx: dict, world: OfflineWorld) -> dict:
     from swarm_rescue.simulation.reporting.place_score_manager import PlaceScoreManager
     from swarm_rescue.tools.map_exploration_scoring import scorer_for_walltime
@@ -160,9 +190,11 @@ def main(argv=None) -> int:
     errors: list = []
     profiler = cProfile.Profile() if args.profile else None
     factory = make_factory(args.role, fx, n, timings, args.agent, errors, profiler, args.share)
+    holder: list = []
     world = OfflineWorld(fx, "rescue" if args.role == "blue" else "place", n,
                          factory, seed=args.seed, bombs=bombs, max_steps=args.max_steps,
-                         carry_ratio_sigma=args.carry_ratio_sigma)
+                         carry_ratio_sigma=args.carry_ratio_sigma, **zone_hooks(fx, holder))
+    holder.append(world)
     factory.timed_class.world = world
     t0 = time.perf_counter()
     summary = world.run()
@@ -182,8 +214,12 @@ def main(argv=None) -> int:
     summary["brain_ms_per_drone_step"] = {"mean": round(float(arr.mean()), 3),
                                           "p99": round(float(np.percentile(arr, 99)), 2),
                                           "max": round(float(arr.max()), 1)}
+    summary["map_name"] = args.map
+    summary["fixture_sha256"] = fx.get("spec_sha256")
+    summary["carrying_at_end"] = sum(d.carrying is not None for d in world.drones)
     if args.role == "red":
         summary["scores"] = red_scores(fx, world)
+        summary["bombs"] = [(round(bb.x, 1), round(bb.y, 1)) for bb in world.bombs]
     summary["diagnostics"] = {i: w.brain.diagnostics() for i, w in enumerate(world.brains)}
     if profiler is not None:
         buf = io.StringIO()
