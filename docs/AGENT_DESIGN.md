@@ -1,6 +1,9 @@
 # Agent design: interfaces, architecture and role policies
 
-Dates are business dates in UTC+8. Status as of 2026-10-14 (Phase 3): the
+Dates are business dates in UTC+8. Phase 4 (2026-10-14) validated B2 and R2
+without changing them: the agent package is byte-identical to `067818a`, and
+the Phase 4 blue candidate B3 (section 4) was not adopted and is kept as the
+frozen package `devtools/comparators/p4_ce09cb7`. Status as of Phase 3: the
 blue candidate **B2** (rescue) is implemented under
 `src/swarm_rescue/solutions/eod/` and selected by
 `solutions/my_drone_eval.py`; the red candidate is described in section 5
@@ -151,6 +154,12 @@ red only:  wallmap.py
   expected length) and skips items it has already applied.
 * **Shared exploration:** off for blue (`SHARE_COVERAGE` and `COMMIT_TARGETS`
   false); offline it delayed completion on Map01 (EXPERIMENTS.md, 7.9).
+* **Candidate B3 (Phase 4, not adopted).** A carrier that does not know the
+  center searches for it with the unloaded drones' target choice along
+  planned paths, instead of B2's straight drive to the start area
+  (`_seek_center`). It turned a 0/10 corridor round into 6/10 but disposed
+  one bomb fewer than B2 in another pair, so B2 was retained under the
+  preregistered rule (PHASE4_PLAN.md, addendum 3; EXPERIMENTS.md 9.7).
 
 ## 5. Red candidate R2 (`red.py`, `wallmap.py`; R1 and R0.1 differences noted)
 
@@ -245,31 +254,57 @@ carry routes (higher unknown cost). Resolved in Phase 3 (B2): delivery to a
 partly walled disposal center (witnessed stand-offs, line-of-sight
 certificate at every distance, progress-based re-planning; Map03 family 50 of
 50 bombs against 38 of 50 for B1) and idle drones waiting next to the center.
-Open, in priority order:
+Found in Phase 4 on synthetic custom geometry (EXPERIMENTS.md section 9) and
+open, in priority order:
 
-1. **Witnesses are not shared (blue).** Each drone uses only stand-offs it
+1. **A hidden disposal center is never searched for once every drone carries
+   (blue, confirmed).** A carrier that does not know the center drives
+   straight at its start area and waits; blue does not explore while
+   carrying. With the center out of sight of the start area and at least as
+   many bombs as drones, all ten drones carried a bomb and none ever saw the
+   center (P4CorridorV1 and P4CorridorV2: 0 of 10). The supplied maps place
+   the center in view of the start area. B3 addresses this and was not
+   adopted; the next step is a B3-like search that does not cost deliveries
+   elsewhere.
+2. **The planner closes narrow passages (all blue and red versions).** With
+   24 px obstacle inflation on 8 px cells, a passage between ideal walls is
+   untraversable for the planner below about 56 px (up to 62 px depending
+   on the cell alignment), although a drone is 30 px wide; under pose error
+   walls are mapped thicker and wider passages close (a 70 px corridor in
+   carriers' own maps).
+3. **Radial fallback without an exit (blue).** With the center known only
+   from a teammate's box, an own map already complete around it and the
+   start area behind a walled side, the fallback's only goal is the enclosed
+   middle and the carrier waits behind the wall (offline, `test_p4_risk_a.py`).
+   With an incomplete map the same goal draws the carrier around the walls
+   and it recovers; the terminal push never moved through a wall.
+4. **Solid-interior inference takes sealed rooms as solid (red, measured).**
+   Precision 0.47-0.48 on a synthetic map with two sealed rooms (94-99 % of
+   the false area inside them) against 0.98 on Map04; the whole-run effect on
+   the wall score was mixed (EXPERIMENTS.md 9.4).
+5. **Witnesses are not shared (blue).** Each drone uses only stand-offs it
    witnessed itself; a carrier that saw the center from one side only
    routes to that side even when another side is nearer. All drones see the
    center from the start area on the supplied maps, so this has not failed
    in a round; it can lengthen carries.
-2. **Worst-case controller latency (blue).** B2's maximum `control()` time
+6. **Worst-case controller latency (blue).** B2's maximum `control()` time
    was 29-33 ms per round against 27-31 ms for B1 (means equal); the
    source of the extra 2-3 ms has not been profiled.
-3. **Bomb table duplicates (blue).** Records of moved or carried bombs can be
+7. **Bomb table duplicates (blue).** Records of moved or carried bombs can be
    recreated from gossip: 100-111 records for 10 bombs in offline Map03 runs.
    Digest de-duplication reduces it; the table is not yet consolidated.
-4. **Compute margin.** B2 ran at 59.6-74.1 steps/s in the Phase 3 rounds on
+8. **Compute margin.** B2 ran at 59.6-74.1 steps/s in the Phase 3 rounds on
    the server (B1 60.5-72.0 in the same configurations; the lowest values on
    Map04); a 7200-step round at 60 steps/s would take 120 s of 240 s there.
    The evaluator's speed is unknown.
-5. **Red wall coverage still depends on what is mapped at placement time.**
+9. **Red wall coverage still depends on what is mapped at placement time.**
    R2 raised the wall score in three real pairs (mean 54.61 to 78.81; Map04
    33.28 to 65.42), but on Map04 the team map held only about 60 % of the
    weighted walls when placement started (offline), and the schedule
    fractions are fixed. The solid-interior inference cannot tell a closed,
    unexplored room from a solid box; on the supplied maps without boxes it
    inferred only a few hundred pixels offline, but a map with sealed rooms
-   would mislead it. Emergency drops near the rally point still overlap
+   would mislead it (measured in Phase 4, item 4). Emergency drops near the rally point still overlap
    occasionally.
-6. Return-area support is minimal (idle drones go to the last position where
+10. Return-area support is minimal (idle drones go to the last position where
    `is_inside_return_area` was true); the supplied maps have no return area.
