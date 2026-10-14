@@ -1,4 +1,4 @@
-# Experiments: methodology, benchmarks and results (Phases 1 to 3)
+# Experiments: methodology, benchmarks and results (Phases 1 to 4)
 
 Dates are business dates in UTC+8. All rounds ran on the remote server
 under the rules in [ENVIRONMENT.md](ENVIRONMENT.md), one process at a time,
@@ -679,3 +679,274 @@ time 10 %, maximum 80):
   largest single cost, as in B1.
   Nothing was optimized for B2, and no collision check was removed.
 * Nothing here measures the organizer's evaluator.
+
+## 9. Phase 4 (2026-10-14): independent generalization validation
+
+The protocol, partitions, scenario families, budget and decision rules were
+frozen in [PHASE4_PLAN.md](PHASE4_PLAN.md) before any agent ran on a
+template scenario; three dated addenda record the scenario and layout
+registry, the stage-1 diagnosis with the freezing of the candidate B3, and
+the stage-2 decision. Phase 4 had its own budget of 24 starts; **22 were
+started, none failed, interrupted or started from a dirty tree; two were
+left unused.**
+
+**Custom geometry.** Rounds on `P4<Family>V<seed>` scenarios run through the
+official launcher with a map class built from framework elements only
+(`devtools/simlab/p4_scenarios.py`); they are synthetic validation
+scenarios, not official maps, also in native mode. The framework's own
+rasterization of each scenario agrees with its specification within 2 px.
+
+Code of the rounds: rounds 1-14 at `3021c95` (agent code identical to
+`067818a`: B2 and R2 as `official`); rounds 15-22 at `46413ac`, where
+`official` is the candidate B3 in rounds 16, 18 and 20 (only `blue.py`
+differs from B2) and R2 in rounds 21-22, and the B2 arm is the frozen
+package `p3_067818a`.
+
+### 9.1 Run ledger (Phase 4)
+
+Generated with `python -m devtools.simlab.summarize <ledger> --phase phase4`.
+
+| # | label | map | mode | agent | run mode | seed | steps | wall s | steps/s | score | components | bombs | termination |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | p4-VB1-b2-map02-wall-s101-seed401 | Map02 | rescue | official | instrumented | 401 | 913 | 13.18 | 69.3 | 99.36 | disposal 100.0, health 96.8, time 100.0 | 10/10 disposed | all_disposed |
+| 2 | p4-VB2-b2-map04-cluster-s102-seed402 | Map04 | rescue | official | instrumented | 402 | 1666 | 26.94 | 61.8 | 99.48 | disposal 100.0, health 97.4, time 100.0 | 10/10 disposed | all_disposed |
+| 3 | p4-VB3-b2-map05-far-s103-seed403 | Map05 | rescue | official | instrumented | 403 | 2377 | 33.23 | 71.5 | 98.48 | disposal 100.0, health 92.4, time 100.0 | 10/10 disposed | all_disposed |
+| 4 | p4-VC1-b2-pocketv1-s111-seed411 | P4PocketV1 | rescue | official | instrumented | 411 | 1903 | 25.35 | 75.1 | 99.52 | disposal 100.0, health 97.6, time 100.0 | 10/10 disposed | all_disposed |
+| 5 | p4-VC2-b2-corridorv1-s112-seed412 | P4CorridorV1 | rescue | official | instrumented | 412 | 5000 | 63.76 | 78.4 | 19.44 | disposal 0.0, health 97.2, time 0.0 | 0/10 disposed | step_limit |
+| 6 | p4-VC3-b2-gpsdarkv1-s113-seed413 | P4GpsdarkV1 | rescue | official | instrumented | 413 | 620 | 8.25 | 75.1 | 99.76 | disposal 100.0, health 98.8, time 100.0 | 10/10 disposed | all_disposed |
+| 7 | p4-VC4-b2-comdarkv1-s114-seed414 | P4ComdarkV1 | rescue | official | instrumented | 414 | 729 | 12.29 | 59.3 | 99.32 | disposal 100.0, health 96.6, time 100.0 | 10/10 disposed | all_disposed |
+| 8 | p4-VC5-b2-clutterv1-wall-s115-seed415 | P4ClutterV1 | rescue | official | instrumented | 415 | 1733 | 23.58 | 73.5 | 99.20 | disposal 100.0, health 96.0, time 100.0 | 10/10 disposed | all_disposed |
+| 9 | p4-VR1-r2-map02-seed421 | Map02 | place | official | instrumented | 421 | 2350 | 27.78 | 84.6 | 78.24 | map 98.2, time 100.0, wall 95.7 | 10 placed | map_submitted |
+| 10 | p4-VR2-r2-roomsv1-seed422 | P4RoomsV1 | place | official | instrumented | 422 | 2350 | 26.1 | 90.0 | 67.31 | map 93.8, time 100.0, wall 51.9 | 10 placed | map_submitted |
+| 11 | p4-VR3-r2-mixedv1-seed423 | P4MixedV1 | place | official | instrumented | 423 | 2350 | 26.17 | 89.8 | 69.90 | map 91.5, time 100.0, wall 70.7 | 10 placed | map_submitted |
+| 12 | p4-VN1-b2-native-pocketv1-s111-seed411 | P4PocketV1 | rescue | official | native | 411 | 1903 | 25.03 | 76.0 | 99.52 | disposal 100.0, health 97.6, time 100.0 | 10/10 disposed | all_disposed |
+| 13 | p4-VN2-r2-native-roomsv1-seed422 | P4RoomsV1 | place | official | native | 422 | 2350 | 25.57 | 91.9 | 67.31 | map 93.8, time 100.0, wall 51.9 | 10 placed | map_submitted |
+| 14 | p4-VD1-r2-roomsv1-repeat-seed422 | P4RoomsV1 | place | official | instrumented | 422 | 2350 | 26.02 | 90.3 | 67.31 | map 93.8, time 100.0, wall 51.9 | 10 placed | map_submitted |
+| 15 | p4-S21-b2-corridorv2-s212-seed611 | P4CorridorV2 | rescue | p3_067818a (comparator) | instrumented | 611 | 5000 | 61.87 | 80.8 | 19.60 | disposal 0.0, health 98.0, time 0.0 | 0/10 disposed | step_limit |
+| 16 | p4-S21-b3-corridorv2-s212-seed611 | P4CorridorV2 | rescue | official | instrumented | 611 | 5000 | 69.52 | 71.9 | 54.64 | disposal 60.0, health 93.2, time 0.0 | 6/10 disposed | step_limit |
+| 17 | p4-S22-b2-pocketv2-s211-seed612 | P4PocketV2 | rescue | p3_067818a (comparator) | instrumented | 612 | 1746 | 23.58 | 74.1 | 99.32 | disposal 100.0, health 96.6, time 100.0 | 10/10 disposed | all_disposed |
+| 18 | p4-S22-b3-pocketv2-s211-seed612 | P4PocketV2 | rescue | official | instrumented | 612 | 5000 | 73.86 | 67.7 | 67.68 | disposal 90.0, health 68.4, time 0.0 | 9/10 disposed | step_limit |
+| 19 | p4-S23-b2-map03-s121-seed431 | Map03 | rescue | p3_067818a (comparator) | instrumented | 431 | 1002 | 13.93 | 71.9 | 99.68 | disposal 100.0, health 98.4, time 100.0 | 10/10 disposed | all_disposed |
+| 20 | p4-S23-b3-map03-s121-seed431 | Map03 | rescue | official | instrumented | 431 | 1002 | 13.84 | 72.4 | 99.68 | disposal 100.0, health 98.4, time 100.0 | 10/10 disposed | all_disposed |
+| 21 | p4-S24-r2-roomsv2-seed521 | P4RoomsV2 | place | official | instrumented | 521 | 2350 | 25.69 | 91.5 | 70.68 | map 94.3, time 100.0, wall 67.5 | 10 placed | map_submitted |
+| 22 | p4-S25-r2-mixedv2-seed522 | P4MixedV2 | place | official | instrumented | 522 | 2350 | 25.0 | 94.0 | 71.09 | map 93.8, time 100.0, wall 71.0 | 10 placed | map_submitted |
+
+"official" is the submission entry point at the round's commit: B2 (rescue)
+and R2 (place) in rounds 1-14, B3 (rescue) in rounds 16, 18 and 20, R2
+(place) in rounds 21-22. Rounds 12-13 are native (no truth log, no wrapper).
+
+### 9.2 Offline attempts (no simulator budget)
+
+All on the remote server's project environment, NUMA node 0, under the
+CPU-only gate unless noted; development signals, not competition results.
+
+| Attempt | Content | Status and result |
+|---|---|---|
+| P4-A001 | Risk A closed-loop carrier cases, B2, `pocket` and `narrow` fixtures, seeds 1-3 | finished; in one case the harness did not create the intended state (the drone saw the center in its first step at its start area); harness corrected |
+| P4-A002 | the same, corrected harness, plus a pre-mapped variant | finished; section 9.3 |
+| P4-A003 | framework fixtures of the 14 C-probe and C-final scenarios (OpenGL, no simulation step, no agent) | finished; within 2 px of the specifications |
+| P4-A004 | the 12 preregistered layouts | finished; hashes in PHASE4_PLAN.md, addendum 1 |
+| P4-A005 | picture of the C-probe scenarios | finished |
+| P4-A006 | Risk C: R1 Map05 seed 1 with the diagnosis version of `ca7f261` (that of P3-A010); observer comparison; repeats over hash seeds and thread settings | finished; all 56.48; the thread-setting variation set a variable OpenCV ignores and therefore varied nothing |
+| P4-A007 | Risk C: P3-A010's environment re-created at `90bb4ee` | finished; R2 draft 80.03 as in P3-A010, R1 56.48 (P3-A010: 54.74) |
+| P4-A008 | Risk C: 8 runs as 4 concurrent single-CPU processes | finished; 54.74 in 8 of 8 |
+| P4-A009 | Risk C: OpenCV threads against CPUs | finished; section 9.5 |
+| P4-A010 | Risk C: OpenCV operations under 1, 2, 8 (and 32) threads | finished; section 9.5 |
+| P4-A011 | official red scorers under 1 and 8 OpenCV threads, Phase 3 red rounds | finished; section 9.5 |
+| P4-A012 | fix verification | finished; section 9.5 |
+| P4-A013 | Risk B: `red_solid_audit.py`, 14 runs | finished; section 9.4 |
+| P4-A014 | B2 on the five C-probe blue scenarios, seeds 1-2 | finished; section 9.6 |
+| P4-A015, A016 | B3 on the `hidden` development fixture, seeds 1-4; route diagnosis of its stuck carriers; planner corridor threshold | finished; section 9.7 |
+| P4-A017 | B3 development batch | **aborted by its owner after about 20 s**: it had been started detached (`nohup`), which the brief does not authorize; nothing used, directory kept as `P4-A017-ABORTED-detached` |
+| P4-A018 | the same batch, attached | finished; section 9.7 |
+| P4-A019, A020 | per-round analysis of the 22 rounds (before and after the accounting fix) | finished; section 9.8 |
+
+### 9.3 Risk A: the blue radial fallback
+
+`delivery.radial_sources` supplies B2's carry goals when no witnessed
+stand-off is supported by the map: outward stand-offs from the center's
+middle, map-checked, and the unchecked set when every candidate is rejected.
+With the center known only from a teammate's box (no own surface points)
+its only goal is the center's middle.
+
+* **Goals.** The unchecked set can contain goals on blocked sides
+  (`test_p4_risk_a.py`: north-face points recorded 20 px too far south yield
+  stand-offs behind the side walls). A stale shared box 60 px off yields a
+  single goal in free space behind a wall, reachable, where no terminal push
+  is possible: a route goal without an exit.
+* **Movement.** The terminal push needs a line-of-sight certificate (a
+  surface point detected in this step, past no mapped obstacle, or a
+  supported witness the drone stands on). In no test and no closed-loop run
+  did a carrier push at the center through a wall (0 terminal aims behind
+  walls).
+* **Closed loop** (offline, one carrier, P4-A002):
+
+  | Case | Seeds 1-3 |
+  |---|---|
+  | box only, own map still empty, start area on the open side | delivered (543-579 steps); the fallback goal drew the carrier around the walls until it saw the open face |
+  | box only, own map empty, start area behind the walled side | delivered (644-667 steps), same mechanism |
+  | box only, own map already complete, start area on the open side | delivered (361-685 steps) |
+  | **box only, own map already complete, start area behind the walled side** | **not delivered in 2500 steps** (41-44 fallback fields; the carrier never left the space behind the south wall and never pushed) |
+  | north face behind a 30 px opening, east face open | seeds 1-2 delivered at the east face; seed 3 kept returning to the opening (10 approach failures, 14 relaxed re-uses) |
+
+* **Rounds.** In Phase 3 round G-4 two drones used the fallback (4 and 2
+  fields) while holding 108-109 witnesses and 600 surface points, and both
+  delivered: the "every witness momentarily rejected by the map" path, not
+  the box-only path. In Phase 4 the fallback was used in rounds V-B3, V-C1,
+  V-C5, S2-2 (both arms) and S2-1 (B3); the only rounds that lost bombs did
+  so for the reasons in sections 9.6 and 9.7.
+
+### 9.4 Risk B: R2's solid-interior inference
+
+`devtools/simlab/red_solid_audit.py` measures, on deep copies of the
+brains, the team's inferred solid area at the start of placement against
+the truth, attributes false area to annotated regions, and runs an
+inference-disabled diagnostic variant on the same seed (P4-A013, offline).
+
+| Map (seed) | Inferred px | Precision | False px in sealed rooms | Wall: R2 / inference off | Decisions changed |
+|---|---|---|---|---|---|
+| Map01 (1) | 384 | 0.333 | 0 | 85.25 / - | 0 of 13 |
+| Map02 (1) | 3136 | 0.785 | 0 | 94.36 / - | 0 of 18 |
+| Map03 (1) | 640 | 0.412 | 0 | 95.58 / - | 0 of 12 |
+| Map04 (1) | 36480 | 0.980 | 0 | 60.85 / 39.63 | 5 of 15 |
+| Map05 (1) | 6656 | 0.830 | 0 | 93.81 / - | 3 of 24 |
+| P4RoomsV1 (1) | 40256 | 0.474 | 19912 | 48.26 / 48.74 | 8 of 14 |
+| P4RoomsV1 (2) | 41664 | 0.483 | 21202 | 46.78 / 41.54 | 5 of 11 |
+| P4MixedV1 (1) | 448 | 0.321 | 56 | 54.92 / 54.92 | 0 of 19 |
+| P4MixedV1 (2) | 4992 | 0.861 | 0 | 56.35 / 66.37 | 1 of 14 |
+
+The official-map values reproduce the Phase 3 offline table exactly. A
+sealed empty room maps like a solid box (outline, unknown interior), so the
+inference takes it as solid; so does a room whose door is closed at cell
+resolution, a pocket of false wall cells, and the disposal center's interior
+when the center was never observed (`test_p4_risk_b.py`). In P4MixedV1 seed
+2 the one changed decision scored higher against the truth (5301 against
+1910 weighted pixels); the -10.0 of the whole run is the divergence that
+follows. Real rounds: wall 51.91 (P4RoomsV1), 70.73 (P4MixedV1), 67.54
+(P4RoomsV2), 71.03 (P4MixedV2), 95.66 (Map02). No red successor was made.
+
+### 9.5 Risk C: reproducibility
+
+* **Cause of the Phase 3 difference** (R1 Map05 seed 1: 56.48 in P3-A008,
+  54.74 in P3-A010). Not the diagnosis tool version (P3-A010's version gives
+  56.48), not the code (P3-A010's environment re-created gives 56.48), not
+  the hash seed: P3-A010 ran as four shards each pinned to **one** CPU, and
+  OpenCV sizes its thread pool from the CPU affinity. Reproduced: 54.74 in 8
+  of 8 runs as four concurrent single-CPU processes; 56.48 with OpenCV at 8
+  threads on one CPU and 54.74 with OpenCV at 1 thread on eight CPUs.
+* **Mechanism.** `cv2.distanceTransform` with `DIST_MASK_PRECISE` gives one
+  result with two or more threads (2, 8 and 32 agree; repeated calls agree)
+  and another with one thread, where a second call on the same input in the
+  same process already differs from the first (up to 1.5e-5 px; on Map05
+  151,093 pixels differ). The offline simulator's clearance field uses it;
+  a changed contact decision then makes the run diverge. The agents do not
+  call it, and their OpenCV operations were bit-identical across thread
+  counts.
+* **Environment finding.** OpenCV reads `OPENCV_FOR_THREADS_NUM` and ignores
+  the `OPENCV_NUM_THREADS` the wrappers exported, so the wrappers' OpenCV cap
+  never had an effect (OpenCV ran with as many threads as the pinned CPUs).
+  `OMP_NUM_THREADS` has no effect either (pthreads backend).
+* **Official scorers.** The wall and map scorers also use the precise
+  transform; on the seven Phase 3 red rounds both scores were bit-identical
+  under 1 and 8 threads and equal to the recorded values.
+* **Fixes** (tooling only): `stable_cv.distance_transform` (two threads) in
+  the offline simulator, layouts, diagnosis and scenario code; the wrappers
+  export `OPENCV_FOR_THREADS_NUM=2`; the red diagnosis measures on copies of
+  the brains. Verified: R1 Map05 seed 1 gives 56.48 on one and on eight
+  CPUs; B2 Map03 seed 1 still ends at step 627 (as in Phase 3); the 12 frozen
+  layouts regenerate byte-identically.
+* **Real simulator.** Identical configurations reproduced exactly: V-N1
+  (native) equals V-C1 (instrumented) in every recorded value, and V-N2
+  (native) and V-D1 (repeat) equal V-R2. Wall-clock-dependent quantities
+  (steps per second, controller time) differ.
+
+### 9.6 Frozen B2 and R2 outside their development scenarios
+
+| Partition | Blue rounds (B2) | Result |
+|---|---|---|
+| B (new layouts on Map02, Map04, Map05) | V-B1 to V-B3 | 10/10 each, steps 913-2377, scores 98.48-99.48 |
+| C-probe | V-C1 pocket, V-C3 gpsdark, V-C4 comdark, V-C5 clutter | 10/10 each, steps 620-1903, scores 99.20-99.76 |
+| C-probe | **V-C2 corridor** | **0/10, step limit, 19.44** |
+| C-final | S2-1 corridor (B2 arm), S2-2 pocket (B2 arm) | 0/10 (19.60); 10/10 at 1746 (99.32) |
+| B | S2-3 Map03 new layout (B2 arm) | 10/10 at 1002 (99.68) |
+
+Offline (P4-A014, seeds 1 and 2): pocket 10/10 at 2111 and 2357 steps,
+corridor 0/10 and 10/10 (at 4808), gpsdark 716 and 715, comdark 708 and
+801, clutter 2006 and 1748.
+
+**Defect (confirmed).** In V-C2 and S2-1 every drone picked up one bomb
+and none had recorded a surface point of the center. A B2 carrier that does
+not know the center drives straight at its start area and waits; blue does
+not explore while carrying; so once every drone carries before anyone has
+seen a hidden center, nobody looks for it. The supplied maps place the
+center in view of the start area, which is why no earlier round showed it.
+
+Red (R2): partition B Map02 map 98.22, wall 95.66; C-probe P4RoomsV1
+93.85 / 51.91, P4MixedV1 91.50 / 70.73; C-final P4RoomsV2 94.35 / 67.54,
+P4MixedV2 93.76 / 71.03; every round submitted at step 2350 with all 10
+bombs placed.
+
+### 9.7 Candidate B3 and the stage-2 decision
+
+B3 (`ce09cb7`, kept as `devtools/comparators/p4_ce09cb7`) lets a carrier
+that does not know the center search for it along planned paths. Offline on
+the development partition (P4-A018 against P4-A014, same seeds): corridor
+6/10 and 4/10 against 0/10 and 10/10; pocket faster (1387 and 1432 steps
+against 2111 and 2357); clutter 2409 and 1337 against 2006 and 1748;
+gpsdark, comdark, Map03 and Map01 identical. On the `hidden` fixture
+(70 px corridor) B3 found the center in every seed and delivered 2, 1, 1
+and 1 of 2 bombs, B2 none; the remaining carriers knew the center but had
+no route, because in their own maps the corridor was closed by the
+planner's 24 px obstacle inflation (8-14 of 14 centre-line cells
+untraversable, none occupied). With ideal walls the planner closes a
+corridor below about 56 px, depending on cell alignment up to 62 px, and
+keeps 64 px open (probe over eight alignments).
+
+Stage 2 (PHASE4_PLAN.md, addendum 3): S2-1 corridor 0/10 (B2) against 6/10
+(B3); S2-2 pocket 10/10 at 1746 (B2) against 9/10 at the step limit, mean
+health 68.4 (B3); S2-3 Map03 identical. B3 disposed fewer bombs than B2 in
+one pair, so under the preregistered rule **B2 is retained**.
+
+### 9.8 Delivery accounting
+
+`carry_episodes.py` now reconciles each instrumented blue round with the
+official disposal count (PHASE4_PLAN.md, section 7). In the 10 instrumented rounds that
+ended on their last disposal, the final carry was cut off by the round's
+end and is counted as a disposal (no phantom delivery failure). In S2-2
+(B3) a bomb was disposed while two drones held it and the reward was split
+0.5/0.5; counting episodes gave 10 logged disposals against an official 9,
+which the reconciliation reported as inconsistent rather than forcing.
+Logged disposals are now summed reward gains; all 14 blue rounds with a
+truth log reconcile. Genuine unresolved carries at the step limit: 10 in
+V-C2, 10 in S2-1 (B2), 4 in S2-1 (B3), 1 in S2-2 (B3); no drop without a
+later disposal.
+
+### 9.9 Runtime
+
+* Blue, B2 (instrumented, 11 rounds): 59.3-80.8 steps per second;
+  controller 0.50-1.05 ms per drone-step (mean), worst case 22.90-33.37 ms.
+  B3 in its three rounds: 67.7-72.4 steps per second, 0.80-0.89 ms,
+  28.21-29.51 ms. Native V-N1: 76.0.
+* Red, R2: 84.6-94.0 steps per second; controller 1.43-1.65 ms mean,
+  39.24-48.71 ms worst case.
+* From Phase 4 on the round wrapper caps OpenCV at two threads (before, it
+  used the 32 pinned CPUs); the agents' OpenCV operations do not depend on
+  the thread count. Nothing measures the organizer's evaluator.
+
+### 9.10 Process deviations
+
+Recorded as they happened; none changed a reported result.
+
+* A stray `python -` on the workstation started its Windows interpreter,
+  which waited on standard input for about two minutes and executed
+  nothing; it was stopped.
+* A CPU list on NUMA node 1 (CPU 16) was passed to the CPU wrapper twice
+  (once by mistake, once to verify the refusal). The gate refused both, but
+  the wrapper had already re-run itself under `taskset`, so the wrapper and
+  the gate ran for about a second each on CPU 16. The wrappers now refuse a
+  CPU list off node 0 before pinning anything (`3021c95`).
+* P4-A017 was started detached and stopped by its owner after about 20 s
+  (section 9.2).
+* Four one-second interpreter calls (OpenCV thread variables) ran pinned to
+  node 0 with a timeout but without the occupancy gate; one JSON file was
+  read with the server's system Python instead of the project interpreter.
