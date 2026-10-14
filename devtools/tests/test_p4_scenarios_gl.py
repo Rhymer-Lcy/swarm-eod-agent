@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -43,9 +44,15 @@ def test_framework_raster_matches_the_specification(name):
     assert info["start_area"] == spec["start_area"]
     walls = data["walls"] > 0
     mine = S.raster(spec)["walls"] > 0
-    inter = (walls & mine).sum()
-    union = (walls | mine).sum()
-    assert inter / union > 0.95, (name, inter / union)
+    # The framework draws walls about 1 px thicker than the nominal 6 px, so
+    # an overlap ratio of thin structures is not informative (0.89-0.97);
+    # instead every pixel of each raster must lie within 2 px of the other,
+    # which a misplaced, missing or misoriented element cannot satisfy.
+    d_to_mine = cv2.distanceTransform((~mine).astype(np.uint8), cv2.DIST_L2, 3)
+    d_to_fw = cv2.distanceTransform((~walls).astype(np.uint8), cv2.DIST_L2, 3)
+    assert walls.sum() > 0 and mine.sum() > 0
+    assert d_to_mine[walls].max() <= 2.0, (name, float(d_to_mine[walls].max()))
+    assert d_to_fw[mine].max() <= 2.0, (name, float(d_to_fw[mine].max()))
     # Every box is solid in the framework's raster (orientation of NormalBox).
     w, h = spec["size_area"]
     for x0, y0, x1, y1 in spec["boxes"]:
