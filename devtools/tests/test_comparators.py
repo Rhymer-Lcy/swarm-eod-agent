@@ -55,15 +55,23 @@ def test_comparator_files_match_git_history(manifest: Path):
         assert blob == (package / name).read_bytes(), name
 
 
-def test_submitted_agent_is_still_the_frozen_b2_r2():
-    """Phase 4: the agent package under solutions/ is B2/R2 unchanged. A
-    successor must be adopted explicitly (new identifier, this test updated
-    in the same change), never introduced by an unnoticed edit."""
+# Files of solutions/eod that may differ from the frozen B2/R2 package, with
+# the candidate they carry. Phase 4: blue.py holds the candidate B3 under
+# evaluation (docs/PHASE4_PLAN.md, addendum 2); R2 is unchanged.
+CANDIDATE_FILES = {"blue.py": "B3"}
+
+
+def test_submitted_agent_is_the_frozen_b2_r2_except_named_candidates():
+    """Phase 4: the agent package under solutions/ is B2/R2 except for the
+    files named in CANDIDATE_FILES. A successor is introduced explicitly (new
+    identifier, this table updated in the same change), never by an
+    unnoticed edit."""
     data = json.loads((COMPARATORS / "p3_067818a.json").read_text(encoding="utf-8"))
     current = REPO / "src" / "swarm_rescue" / "solutions" / "eod"
     assert sorted(p.name for p in current.glob("*.py")) == sorted(data["files_sha256"])
     for name, digest in data["files_sha256"].items():
-        assert hashlib.sha256((current / name).read_bytes()).hexdigest() == digest, name
+        same = hashlib.sha256((current / name).read_bytes()).hexdigest() == digest
+        assert same != (name in CANDIDATE_FILES), name
 
 
 def test_comparator_is_importable_and_isolated():
@@ -88,10 +96,13 @@ def test_comparator_is_importable_and_isolated():
     from devtools.comparators.p3_067818a import delivery as b2_delivery
     from devtools.comparators.p3_067818a import red as r2_red
     from devtools.comparators.p3_067818a.shell import EodPlaceDrone as R2Drone
+    from devtools.comparators.p3_067818a.shell import EodRescueDrone as B2Drone
     from swarm_rescue.solutions.eod import delivery as current_delivery
     from swarm_rescue.solutions.eod import red as current_red
     assert R2Drone.__module__ == "devtools.comparators.p3_067818a.shell"
+    assert B2Drone.__module__ == "devtools.comparators.p3_067818a.shell"
     assert b2_blue.RescueBrain is not current_blue.RescueBrain
+    assert not hasattr(b2_blue.RescueBrain, "_seek_center")      # frozen B2, not B3
     assert b2_blue.ApproachSet is b2_delivery.ApproachSet
     assert b2_delivery.ApproachSet is not current_delivery.ApproachSet
     assert r2_red.PlaceBrain is not current_red.PlaceBrain

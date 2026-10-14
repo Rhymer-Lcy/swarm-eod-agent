@@ -1,4 +1,9 @@
-"""Blue (rescue) brain, candidate B2 (B1 in Phase 2, B0 and B0.1 in Phase 1).
+"""Blue (rescue) brain, candidate B3 (B2 in Phase 3, B1 in Phase 2, B0 and B0.1 in Phase 1).
+
+B3 differs from B2 (frozen in Phase 4 as package ``p3_067818a``) in one
+place: a carrier that does not know where the disposal center is searches
+for it along planned paths instead of driving straight to its start area and
+waiting there (``_seek_center``; Phase 4).
 
 Every drone runs the same decentralised policy:
 
@@ -72,6 +77,7 @@ PROGRESS_EPS = 5.0         # px of distance gain that count as progress
 PROGRESS_MOVE = 80.0       # a drone that moved this far is travelling, not stuck
 IDLE_DC_CLEARANCE = 130.0  # idle drones wait at least this far from the center
 IDLE_PERIOD = 100
+SEEK_PERIOD = 120          # B3: steps before a carrier re-chooses where to search for the center
 
 
 class Bomb:
@@ -159,10 +165,12 @@ class RescueBrain(BrainBase):
         # Progress watch near the center: best distance, its step and position.
         self.progress: Optional[Tuple[float, int, float, float]] = None
         self._idle_spot: Optional[Tuple[int, Tuple[float, float]]] = None
+        self._seek: Optional[Tuple[int, Tuple[float, float]]] = None   # B3: step, goal
         self.diag.update({"grasps": 0, "disposed": 0, "drops": 0, "grasp_timeouts": 0,
                           "claims": 0, "yields": 0, "live_aims": 0, "witness_aims": 0,
                           "approach_failures": 0, "relaxed_sources": 0,
-                          "radial_fallbacks": 0, "terminal_blocked": 0})
+                          "radial_fallbacks": 0, "terminal_blocked": 0,
+                          "center_searches": 0})
 
     # ------------------------------------------------------------------ API
     def step(self, obs: Observation) -> Command:
@@ -463,7 +471,7 @@ class RescueBrain(BrainBase):
         cmd = Command(grasper=1)
         if not self.dc.known:
             self.state = "carry"
-            target = self.home
+            target = self._seek_center(obs)
         else:
             dist = self.dc.distance(est.x, est.y)
             self._watch_progress(obs, dist)
@@ -480,6 +488,29 @@ class RescueBrain(BrainBase):
         cmd.forward, cmd.lateral = f, l
         self.target = target
         return cmd
+
+    def _seek_center(self, obs: Observation) -> Tuple[float, float]:
+        """Where a carrier that does not know the disposal center goes (B3).
+
+        It searches for the center with the bomb held: the exploration target
+        choice of the unloaded drones (unsearched or frontier cells, spread
+        away from teammates), re-chosen every ``SEEK_PERIOD`` steps or on
+        arrival, followed along a planned path. With nothing left to search
+        it follows a planned path to its start area. B2 drove straight at
+        the start area and waited there, so a team whose drones had all
+        picked up bombs before anyone saw a hidden center never found it
+        (Phase 4, P4CorridorV1: 0 of 10 disposed).
+        """
+        now, est = obs.step, self.est
+        seek = self._seek
+        if seek is None or now - seek[0] > SEEK_PERIOD or \
+                math.hypot(seek[1][0] - est.x, seek[1][1] - est.y) < 30.0:
+            goal = self._choose_explore_target(now, disperse_until=0)
+            if goal is None:
+                goal = self.home if self.home is not None else (est.x, est.y)
+            self._seek = seek = (now, goal)
+            self.diag["center_searches"] += 1
+        return self._path_target(obs, seek[1])
 
     def _watch_progress(self, obs: Observation, dist: float) -> None:
         """Re-plan when a carrier near the center stops getting closer.
