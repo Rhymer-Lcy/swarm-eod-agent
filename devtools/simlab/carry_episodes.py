@@ -9,6 +9,11 @@ the drone's distance to the disposal-center box at the end, the health lost
 during the episode and the heading error of the agent's estimate while
 carrying. The disposal-center box comes from the walls-only fixture of the
 map (evaluation-only ground truth, never used by agents).
+
+With the round's ``record.json`` beside the log, the outcomes are also
+reconciled with the official disposal count (``reconciled``): carries cut
+off by the round ending on its last disposal are counted as disposals, and
+only carries still unresolved are delivery failures.
 """
 
 from __future__ import annotations
@@ -67,10 +72,48 @@ def episodes(run_dir: Path, map_name: str) -> dict:
                 "health_lost": int(rows[s, f["health"]] - last[f["health"]]),
                 "heading_err_p95": round(float(np.percentile(errs, 95)), 1) if errs else None,
             })
+    last_step = int(drones[:, f["step"]].max()) if len(drones) else 0
     summary = {"center_box": [round(v, 1) for v in box], "episodes": out,
+               "last_logged_step": last_step,
                "counts": {k: sum(e["outcome"] == k for e in out)
                           for k in ("disposed", "dropped", "held_at_end")}}
+    record = run_dir / "record.json"
+    if record.exists():
+        rec = json.loads(record.read_text(encoding="utf-8"))
+        if rec.get("bombs_disposed") is not None:
+            summary["reconciled"] = reconcile(out, int(rec["bombs_disposed"]),
+                                              int(rec.get("bombs_total") or 0), last_step)
     return summary
+
+
+def reconcile(episodes_: list, official_disposed: int, total: int, last_step: int) -> dict:
+    """Carry outcomes reconciled with the official disposal count.
+
+    The truth log is written before each step's physics, so in a round that
+    ends because the last bomb was disposed, the releases of that final step
+    are never logged and their episodes read "held_at_end". The official
+    scorer is the authority: the difference between the official count and
+    the rewarded releases in the log is credited to episodes still held at
+    the last logged step (nearest the center first). What remains held is a
+    genuine unresolved carry. A difference that the held episodes cannot
+    explain is reported as inconsistent rather than forced.
+    """
+    logged = sum(e["outcome"] == "disposed" for e in episodes_)
+    held = [e for e in episodes_ if e["outcome"] == "held_at_end"]
+    at_end = sorted((e for e in held if e["end"] >= last_step - 1),
+                    key=lambda e: e["end_distance_to_center"])
+    credit = official_disposed - logged
+    consistent = 0 <= credit <= len(at_end)
+    credited = at_end[:credit] if consistent else []
+    return {
+        "official_disposed": official_disposed, "bombs_total": total,
+        "disposed_logged": logged,
+        "disposed_at_termination": len(credited),
+        "dropped": sum(e["outcome"] == "dropped" for e in episodes_),
+        "held_unresolved": len(held) - len(credited),
+        "undisposed_official": max(total - official_disposed, 0) if total else None,
+        "consistent": consistent,
+    }
 
 
 def main(argv=None) -> int:
