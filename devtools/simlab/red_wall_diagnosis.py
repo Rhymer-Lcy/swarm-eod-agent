@@ -29,6 +29,7 @@ simulator, not a competition result.
 from __future__ import annotations
 
 import argparse
+import copy
 import importlib
 import json
 import math
@@ -173,9 +174,13 @@ def run(map_name: str, seed: int, drones: int = 5, agent: str = "current") -> di
                                - int(0.03 * brains[i].max_steps)})
             inventory[i] = d.inventory
         if world.step_index == t_place:
-            at_place = _team_map(brains, wallmap.render, wallmap.merge)
-            cand_place = _agent_candidates(brains, fx["walls"].shape)
-            solid_place = _solid_inference(brains, fx["walls"])
+            # Measured on a copy: reading the live brains (the center box
+            # refresh in ``bbox()``, planner caches) could change the run
+            # being measured (Phase 4, Risk C).
+            frozen = copy.deepcopy(brains)
+            at_place = _team_map(frozen, wallmap.render, wallmap.merge)
+            cand_place = _agent_candidates(frozen, fx["walls"].shape)
+            solid_place = _solid_inference(frozen, fx["walls"])
         if not running:
             break
     at_end = _team_map(brains, wallmap.render, wallmap.merge)
