@@ -151,8 +151,10 @@ The server is shared. These rules apply to every job:
    every GPU's state checked, not only the one intended.
 4. **Bound every run**: `timeout`, thread caps (`OMP_NUM_THREADS`,
    `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `NUMEXPR_NUM_THREADS`,
-   `OPENCV_NUM_THREADS`), one simulation process unless a parallel mode has been
-   tested.
+   `OPENCV_FOR_THREADS_NUM`), one simulation process unless a parallel mode has
+   been tested. OpenCV ignores `OPENCV_NUM_THREADS` (also still exported) and
+   otherwise uses as many threads as the CPU affinity allows; measured in
+   Phase 4, until then the wrappers' OpenCV cap had no effect.
 5. **Never** terminate, renice, re-pin or otherwise touch another user's
    processes; never use `pkill`, `killall` or `pgrep -f` patterns; terminate
    only this project's own PIDs. No `sudo`, no system packages, no driver or

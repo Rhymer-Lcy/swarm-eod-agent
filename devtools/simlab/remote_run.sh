@@ -31,6 +31,10 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 MKL_NUM_THREADS=2
 export NUMEXPR_NUM_THREADS=2 OPENCV_NUM_THREADS=2
+# OpenCV reads OPENCV_FOR_THREADS_NUM; it ignores OPENCV_NUM_THREADS and
+# otherwise sizes its pool from the CPU affinity; two threads, because its
+# single-threaded distance transform is not repeatable (Phase 4, stable_cv.py).
+export OPENCV_FOR_THREADS_NUM=2
 
 if ! "$PYTHON" -m devtools.simlab.occupancy --cpus "$CPUSET" --egl-device "$EGL_DEVICE"; then
     echo "DEFERRED: host not free for this run" >&2
