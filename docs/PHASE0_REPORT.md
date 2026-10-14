@@ -1,6 +1,6 @@
 # Phase 0 completion report
 
-The final section, [Phase 0.1](#phase-01-hardening-memory-isolation-and-publication),
+The final section, [Phase 0.1](#phase-01-hardening-private-file-isolation-and-publication),
 supersedes the Phase 0 disposition, blocker table and entry conditions below.
 
 Business date 2026-10-12 (UTC+8). Scope: workspace initialization, source
@@ -69,14 +69,14 @@ Entry conditions:
 5. The real team identity is written locally (B6) before the first packaging
    rehearsal.
 
-## Phase 0.1: hardening, memory isolation and publication
+## Phase 0.1: hardening, private-file isolation and publication
 
 Business date 2026-10-12 (UTC+8). This was the last pre-competition
 preparation task. **Disposition: PASS WITH EXTERNAL LIMITATIONS.**
 
 | Item | Result |
 |---|---|
-| Project memory | development tooling auto-memory redirected to the ignored `private project memory` by the ignored `private local configuration`; verified with a session started in the repository (see `local project instructions`, "Project memory") |
+| Private notes | Working notes and local configuration kept in ignored local paths, outside version control; verified in the repository |
 | Server policy | NUMA node 0 only, defer otherwise (node 1 is never a fallback); GPUs checked before use, idleness is not allocation; EGL device mapping unresolved ([ENVIRONMENT.md](ENVIRONMENT.md)) |
 | Scoring questions | Draft for the organizer, not sent: [ORGANIZER_QUESTIONS.md](ORGANIZER_QUESTIONS.md) |
 | Setup | Windows, online Ubuntu and offline Ubuntu procedures; lock files still not validated by a clean install |

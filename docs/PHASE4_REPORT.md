@@ -23,8 +23,8 @@ geometry built from the official framework, not the organizer's maps.
 ## 2. Git states
 
 * Start: workstation `main` = `origin/main` = `067818a`, clean; server clone
-  at `067818a`, clean. Project memory read from the project's own directory;
-  no other project's memory was written.
+  at `067818a`, clean. Private working notes were read from this project's own
+  ignored directory; no other project's notes were written.
 * Agent code: at the end of Phase 4 `src/swarm_rescue/solutions/` is
   byte-identical to `067818a` (B2 and R2). The final commit and the pushed
   `origin/main` are recorded in the review package manifest.

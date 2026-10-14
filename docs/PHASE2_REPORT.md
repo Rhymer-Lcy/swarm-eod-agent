@@ -22,7 +22,7 @@ rounds and claim no statistical significance beyond an exact sign test.
   (agent code identical), brought to `ddc6897` by bundle before any test.
 * Phase 2 budget: 30 complete rounds, separate from Phase 1's 16 (closed).
 * Mid-phase owner directive: all Python execution on the remote server
-  (remote-first policy, recorded in `local project instructions` and ENVIRONMENT.md). From then
+  (remote-first policy, recorded in ENVIRONMENT.md). From then
   on, the workstation ran no Python; tests, analyses, profiling and the
   checker ran on the server, uncommitted work in a scratch worktree.
 

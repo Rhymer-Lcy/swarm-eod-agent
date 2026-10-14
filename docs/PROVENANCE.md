@@ -28,7 +28,7 @@ not presented as a mirror of any repository.
 | 1. Upstream simulator | Swarm-Rescue by Emmanuel Battesti, built on simple-playgrounds | `LICENSE`: MIT, Copyright (c) 2021 Emmanuel Battesti, with an attribution notice for simple-playgrounds (MIT, Copyright (c) 2021 Michael Garcia Ortiz). Upstream: https://github.com/emmanuel-battesti/swarm-rescue (the URL is the one given in `pyproject.toml`). |
 | 2. Competition baseline | `swarm-rescue` 5.1.3 as supplied: the EOD adaptation (bombs, disposal centers, red/blue roles, scoring), Map01-Map05, Chinese participant guides, configuration, checker and examples | Supplied by the competition organizer through Gitee. Authorship of the competition-specific changes is not stated. The only license file is the MIT `LICENSE` above; whether it was meant to cover the organizer's additions is not stated. |
 | 3. This project's agent | Future code under `src/swarm_rescue/solutions/` | Not written in Phase 0. |
-| 4. Project infrastructure | `docs/`, `devtools/`, `environments/`, `local project instructions`, `.gitattributes`, the appended part of `.gitignore` | Written for this project. |
+| 4. Project infrastructure | `docs/`, `devtools/`, `environments/`, `.gitattributes`, the appended part of `.gitignore` | Written for this project. |
 
 The repository history keeps the layers apart: the commit tagged
 `baseline-supplied-5.1.3` contains exactly the 202 files of the archive (bytes

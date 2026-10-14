@@ -36,10 +36,10 @@
 | Tracked (public once approved) | Local only (`_local/`, ignored) |
 |---|---|
 | Baseline source as supplied (subject to the redistribution question) | Original ZIP and PDF with their manifest |
-| `docs/`, `devtools/`, `environments/`, `local project instructions` | Real `team_info.yml` (at its required path, ignored) |
+| `docs/`, `devtools/`, `environments/` | Real `team_info.yml` (at its required path, ignored) |
 | Placeholder identity template | Server access notes, private patterns, wheels, bundles, logs, run outputs |
 | | `_review_packages/` (generated ZIPs) |
-| | `private project memory` (development tooling project memory) and `private local configuration` |
+| | Local working instructions, private notes and local tool configuration (ignored through repository-local exclusions, never tracked) |
 
 Addresses, host names, accounts, workstation paths and the registered team
 identity are never written into tracked files. The owner's list of such

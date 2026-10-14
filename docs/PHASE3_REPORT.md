@@ -21,8 +21,8 @@ Map03 and the red maps are development scenarios, and the limits in section
 ## 2. Starting state, model and environment
 
 * Start: workstation HEAD = `origin/main` = `540054b`, clean; server clone at
-  `540054b`, clean. Project memory in `private project memory` (this project's
-  dedicated directory); no other project's memory was written.
+  `540054b`, clean. Private working notes were kept in this project's own
+  ignored directory; no other project's notes were written.
 
 * All Python ran on the remote server's project environment (CPython
   3.11.17, absolute interpreter path), pinned to NUMA node 0 behind the
