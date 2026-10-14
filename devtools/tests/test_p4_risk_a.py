@@ -6,7 +6,9 @@ map-checked, and the *unchecked* set when every candidate is rejected. These
 tests establish when that fallback is reached, whether its goals can lie on
 a blocked side, and whether the terminal movement (which has its own
 line-of-sight certificate) can be led through a wall by them. They describe
-B2 as frozen; they do not change it. Geometry: ``delivery_fixtures`` (``pocket``:
+B2 as frozen (the package ``p3_067818a``; since Phase 5 the agent under
+``solutions/`` is the candidate B4-S, whose behaviour in the same cases is
+tested in ``test_b4s.py`` with these helpers); they do not change it. Geometry: ``delivery_fixtures`` (``pocket``:
 center walled on west, south and east with 2 px gaps; ``narrow``: north face
 behind a 30 px opening, east face open), never official map coordinates.
 """
@@ -24,8 +26,8 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from devtools.comparators.p3_067818a import blue as b2_blue  # noqa: E402
 from devtools.simlab import delivery_fixtures as DF  # noqa: E402
-from swarm_rescue.solutions.eod import blue as b2_blue  # noqa: E402
 from swarm_rescue.solutions.eod import delivery as D  # noqa: E402
 from swarm_rescue.solutions.eod import params as P  # noqa: E402
 from swarm_rescue.solutions.eod.grid import OccupancyGrid  # noqa: E402
@@ -81,11 +83,13 @@ def _paint(grid: OccupancyGrid, occupied_px: np.ndarray, unknown_px: np.ndarray 
     grid.version += 1
 
 
-def _brain(scenario="pocket", pose=(SOUTH[0], SOUTH[1], math.pi / 2), home=(-60.0, 120.0)):
-    """A B2 carrier whose map shows the walls and the center's outline (the
-    lidar maps a box's outline; its interior stays unobserved)."""
+def _brain(scenario="pocket", pose=(SOUTH[0], SOUTH[1], math.pi / 2), home=(-60.0, 120.0),
+           module=b2_blue):
+    """A carrier (B2 unless ``module`` names another agent) whose map shows
+    the walls and the center's outline (the lidar maps a box's outline; its
+    interior stays unobserved)."""
     walls, solid, outline = _rasters(scenario)
-    brain = b2_blue.RescueBrain(0, 1, (DF.W, DF.H), 3000)
+    brain = module.RescueBrain(0, 1, (DF.W, DF.H), 3000)
     interior = solid & ~walls & ~outline
     _paint(brain.grid, walls | outline, unknown_px=interior)
     est = brain.est
@@ -257,7 +261,7 @@ def test_recovery_after_a_new_observation():
 
 # ----------------------------------------------- closed loop (offline sim)
 def _carrier_run(scenario, start, home, see_first, steps=2500, seed=1, shared_box=False,
-                 premap=False):
+                 premap=False, module=b2_blue):
     """One carrier in the offline approximation, started at ``start`` with a
     bomb attached. ``see_first``: positions visited for 30 steps each before
     the carry (what it may witness). ``shared_box``: the carrier's own
@@ -274,7 +278,7 @@ def _carrier_run(scenario, start, home, see_first, steps=2500, seed=1, shared_bo
     brains = []
 
     def factory(i):
-        brains.append(b2_blue.RescueBrain(i, 1, (DF.W, DF.H), steps + 400))
+        brains.append(module.RescueBrain(i, 1, (DF.W, DF.H), steps + 400))
         return brains[-1]
 
     world = OfflineWorld(fx, "rescue", 1, factory, seed=seed, bombs=[(250.0, -200.0)],
