@@ -39,6 +39,7 @@ import numpy as np
 
 from .fixtures import load_fixture
 from .offline_sim import OfflineWorld
+from .stable_cv import distance_transform
 
 SCALE = 4
 BOUNDARY_WEIGHT = 0.5
@@ -72,7 +73,7 @@ def _agent_candidates(brains, shape) -> np.ndarray:
 
 def _truth_candidates(fx) -> np.ndarray:
     walls = fx["walls"].astype(np.uint8)
-    dist = cv2.distanceTransform(1 - walls, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+    dist = distance_transform(1 - walls)
     return dist >= 17.0
 
 

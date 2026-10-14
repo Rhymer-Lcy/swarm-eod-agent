@@ -437,7 +437,8 @@ def free_region(spec: Dict[str, Any], clearance: float = 17.0) -> np.ndarray:
     import cv2
     r = raster(spec)
     solid = (r["walls"] | r["dc"]).astype(np.uint8)
-    dist = cv2.distanceTransform(1 - solid, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+    from .stable_cv import distance_transform
+    dist = distance_transform(1 - solid)
     ok = (dist >= clearance).astype(np.uint8)
     _, labels = cv2.connectedComponents(ok)
     w, h = spec["size_area"]

@@ -35,6 +35,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 import cv2
 import numpy as np
 
+from devtools.simlab.stable_cv import distance_transform
 from swarm_rescue.solutions.eod import params as P
 from swarm_rescue.solutions.eod.observation import Command, Observation, SemanticHit
 
@@ -103,8 +104,9 @@ class OfflineWorld:
         r1, c1 = self._px(self.dc_box[2], self.dc_box[1])
         solid[max(r0, 0):r1 + 1, max(c0, 0):c1 + 1] = 1
         self.solid = solid
-        self.dist = cv2.distanceTransform((1 - solid).astype(np.uint8), cv2.DIST_L2,
-                                          cv2.DIST_MASK_PRECISE)
+        # Single-threaded: the multi-threaded transform differs in the last
+        # bits and that changed whole runs (stable_cv.py, Phase 4 Risk C).
+        self.dist = distance_transform((1 - solid).astype(np.uint8))
         self.max_steps = max_steps or int(fixture["max_timestep_limit"])
         self.n = n_drones
         self.drones = [self._spawn(i) for i in range(n_drones)]

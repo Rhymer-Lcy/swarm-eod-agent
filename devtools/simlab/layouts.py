@@ -36,6 +36,7 @@ import cv2
 import numpy as np
 
 from .fixtures import load_fixture
+from .stable_cv import distance_transform
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "_local" / "layouts"
@@ -44,8 +45,7 @@ DEFAULT_OUT = REPO_ROOT / "_local" / "layouts"
 def admissible_mask(fx: dict, clearance: float = 26.0) -> np.ndarray:
     walls = fx["walls"].astype(np.uint8)
     h, w = walls.shape
-    dist = cv2.distanceTransform((1 - walls).astype(np.uint8), cv2.DIST_L2,
-                                 cv2.DIST_MASK_PRECISE)
+    dist = distance_transform((1 - walls).astype(np.uint8))
     ok = dist >= clearance
     dc = fx["disposal_center"]
     c0 = int(dc["x"] - dc["width"] / 2 + w / 2) - 45
@@ -77,8 +77,7 @@ def sample_layout(fx: dict, n_bombs: int, seed: int, profile: str = "uniform",
         weight = weight / weight.sum()
     elif profile == "wall":
         # Close to walls, as a red team maximizing wall coverage leaves them.
-        dist = cv2.distanceTransform((1 - fx["walls"].astype(np.uint8)).astype(np.uint8),
-                                     cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        dist = distance_transform((1 - fx["walls"].astype(np.uint8)).astype(np.uint8))
         weight = np.exp(-(dist[rows, cols] - 26.0) / 20.0)
         weight = weight / weight.sum()
     elif profile == "cluster":
